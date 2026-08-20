@@ -1,0 +1,71 @@
+# Source definitions — Apify actors + free REST APIs.
+# Secrets are referenced by env-var NAME (resolved at runtime), never inlined.
+
+apify:
+  token_env: APIFY_TOKEN
+  # Actor runs time out after this many seconds; keeps the whole job < 20 min.
+  timeout_secs: 240
+  # How many search-title queries to run per actor+pipeline. Each query is a
+  # separate actor run, so this is the main cost/coverage knob. 2 = broad but
+  # cheap; raise for wider coverage at higher Apify spend.
+  queries_per_run: 2
+  # Per-run result cap (per actor run). Total daily results ~= queries x
+  # locations x max_items x sources. Lower this to cut cost.
+  actors:
+    indeed:
+      id: "valig/indeed-jobs-scraper"
+      cost_per_1k: 0.10
+      pipelines: [india, international]
+      max_items: 40
+    linkedin:
+      id: "valig/linkedin-jobs-scraper"
+      cost_per_1k: 0.40
+      pipelines: [india, international]
+      max_items: 30
+    naukri:
+      id: "valig/naukri-jobs-scraper"
+      cost_per_1k: 0.40
+      pipelines: [india]
+      max_items: 40
+    bayt:
+      id: "agentx/bayt-jobs-scraper"
+      pipelines: [international]
+      max_items: 25
+    glassdoor:
+      id: "valig/glassdoor-jobs-scraper"
+      cost_per_1k: 0.40
+      pipelines: [international]
+      max_items: 30
+
+free_apis:
+  adzuna:
+    base_url: "https://api.adzuna.com/v1/api/jobs"
+    app_id_env: ADZUNA_APP_ID
+    app_key_env: ADZUNA_APP_KEY
+    # Adzuna has NO UAE ('ae') coverage — including it just returns 404s.
+    countries: ["gb", "in"]
+    max_results_per_query: 50
+    max_days_old: 2
+
+  reed:
+    base_url: "https://www.reed.co.uk/api/1.0/search"
+    api_key_env: REED_API_KEY
+    results_to_take: 50
+
+  remoteok:
+    url: "https://remoteok.com/api"
+    tags: ["machinelearning", "ai", "nlp", "python"]
+
+  serper:
+    base_url: "https://google.serper.dev/search"
+    api_key_env: SERPER_API_KEY
+    search_type: "search"
+    queries_per_day: 80          # ~2500/month / 30
+
+  gmail_alerts:
+    sender_filter: "jobalerts-noreply@linkedin.com"
+    hours_lookback: 48
+    # OAuth token path (local dev). In CI, provide GMAIL_OAUTH_TOKEN as a secret.
+    token_path: "gmail_token.json"
+    credentials_path: "gmail_credentials.json"
+    token_env: GMAIL_OAUTH_TOKEN

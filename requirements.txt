@@ -1,0 +1,17 @@
+# Core
+pydantic>=2.5,<3
+PyYAML>=6.0
+requests>=2.31
+python-dotenv>=1.0
+
+# Scraping
+apify-client>=1.7
+
+# Google Sheets
+gspread>=6.0
+google-auth>=2.28
+
+# Gmail alert reading (optional source) + local OAuth token generation
+google-api-python-client>=2.120
+google-auth-oauthlib>=1.2
+google-auth-httplib2>=0.2

@@ -1,0 +1,85 @@
+# LLM scoring config — Gemini model ladder, weights, thresholds.
+
+gemini:
+  # Model ladder — best first. Each model is used until it hits its free-tier
+  # DAILY quota (or stays unavailable), then the scorer cascades to the next.
+  # Full "flash" models score better but cap at ~20 requests/DAY on the free
+  # tier; the "lite" models are lighter but allow ~500/day, so they anchor the
+  # bottom and keep the run scoring even after the good models are spent.
+  # Run scripts/gemini_check.py to see which models your key can reach; reorder
+  # freely (put a lite model first if you'd rather have speed over top quality).
+  models:
+    # -- top-quality flash (best judgement; ~5 RPM / 20 RPD each) --
+    - "gemini-3.7-flash"
+    - "gemini-3.6-flash"
+    - "gemini-3.5-flash"
+    - "gemini-3-flash-preview"
+    - "gemini-2.5-flash"
+    - "gemini-omni-flash-preview"
+    # -- lite tier (lighter; 500 RPD on the 3.x lites) --
+    - "gemini-3.5-flash-lite"
+    - "gemini-3.1-flash-lite"
+    - "gemini-3.1-flash-lite-preview"
+    - "gemini-flash-lite-latest"
+    - "gemini-2.5-flash-lite"
+    - "gemini-flash-latest"
+    # -- Gemma anchor (huge free quota: ~30 RPM / 14,400 RPD) — catches
+    #    everything the tiers above can't, keeping the run off rule-based --
+    - "gemma-4-31b-it"
+    - "gemma-4-26b-a4b-it"
+  # Fallback used only if "models" above is removed.
+  model: "gemini-3.5-flash-lite"
+  api_key_env: GEMINI_API_KEY
+  # REST endpoint template; {model} and {key} filled at runtime.
+  endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+  # 20 jobs/call halves the number of requests vs 10, staying well under RPD.
+  batch_size: 20
+  max_description_chars: 500
+  temperature: 0.1
+  max_retries: 3
+  retry_backoff_secs: 5
+  # Minimum seconds between LLM calls. 5s = 12/min, safely under the 15-RPM
+  # lite-model limit so the lite tier isn't cut short by burst rate-limiting.
+  min_request_interval_secs: 5
+
+weights:
+  experience_fit: 0.30
+  role_fit: 0.30
+  tech_stack_match: 0.20
+  visa_status: 0.20          # international only; redistributed for India
+
+thresholds:
+  minimum_composite: 40      # below this -> dropped
+  strong_match: 60           # at/above this -> "Strong match"
+
+# How a visa_status maps onto its 0-100 sub-score (international pipeline).
+visa_score_map:
+  YES: 100
+  UNKNOWN: 60
+  NO: 0
+  "N/A": 0
+
+tech_stack_keywords:
+  - "python"
+  - "llm"
+  - "large language model"
+  - "rag"
+  - "retrieval augmented"
+  - "langchain"
+  - "llamaindex"
+  - "agent"
+  - "agentic"
+  - "azure"
+  - "aws"
+  - "gcp"
+  - "openai"
+  - "mlops"
+  - "nlp"
+  - "transformer"
+  - "fine-tuning"
+  - "pytorch"
+  - "tensorflow"
+  - "hugging face"
+  - "vector database"
+  - "embedding"
+  - "prompt engineering"

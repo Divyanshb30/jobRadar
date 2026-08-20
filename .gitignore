@@ -1,0 +1,22 @@
+# Secrets — never commit
+.env
+config/.env
+*.env
+gmail_token.json
+gmail_credentials.json
+service_account*.json
+google_credentials*.json
+credentials/
+jobradar/
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Runtime
+logs/
+*.log
+.DS_Store

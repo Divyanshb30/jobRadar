@@ -1,0 +1,76 @@
+# Pipeline definitions, geography routing, role keyword filters.
+
+# Search terms fed to the scrapers.
+search_keywords:
+  - "AI Engineer"
+  - "Applied AI Engineer"
+  - "Machine Learning Engineer"
+  - "ML Engineer"
+  - "GenAI Engineer"
+  - "NLP Engineer"
+  - "MLOps Engineer"
+  - "Data Scientist"
+
+target_roles:
+  primary:
+    - "AI Engineer"
+    - "Applied AI Engineer"
+    - "ML Engineer"
+    - "Machine Learning Engineer"
+    - "GenAI Engineer"
+    - "Agentic AI Engineer"
+    - "NLP Engineer"
+    - "MLOps Engineer"
+  secondary:
+    - "Data Scientist"   # kept only if the LLM confirms it is ML-heavy
+
+# Title MUST match this to survive the pre-filter (case-insensitive).
+title_keywords_regex: "(ai\\s*engineer|applied\\s*ai|machine\\s*learn|ml\\s*engineer|genai|generative\\s*ai|agentic|nlp|mlops|deep\\s*learn|llm|data\\s*scien|artificial\\s*intel)"
+
+# If the title matches this, drop it (senior/lead/etc. above the experience gate).
+title_exclusion_regex: "(senior|staff|principal|\\blead\\b|director|head\\s+of|vp\\s+of|\\bmanager\\b|\\bintern\\b|phd\\s+required|(?:1[0-9]|[3-9])\\+\\s*years)"
+
+# Aggregator / search-index pages (mostly from Google Jobs organic results) are
+# not real listings — e.g. "1597 NLP engineer jobs in India", "ML Engineer Jobs,
+# Careers & Recruitment". A genuine job title almost never contains the plural
+# word "jobs" or a leading result count, so those are reliable junk signals.
+junk_title_patterns:
+  - "\\bjobs\\b"                 # plural 'jobs' -> index/aggregator page
+  - "^\\s*\\d[\\d,]*\\+?\\s"     # leading result count: '1597 ', '3000+ '
+  - "careers?\\s*&"             # 'Careers & Recruitment'
+  - "\\bvacanc"                 # 'vacancies' listing pages
+
+experience_gate:
+  max_years: 2
+  drop_if_title_contains: ["senior", "staff", "principal", "lead", "director"]
+
+staleness_hours: 48
+
+pipelines:
+  india:
+    geographies: ["india", "bangalore", "bengaluru", "mumbai", "delhi", "hyderabad", "pune", "chennai", "noida", "gurgaon", "gurugram", "kolkata", "ahmedabad"]
+    remote_ok: true
+    visa_required: false
+    min_ctc_lpa: 25
+    salary_undisclosed_action: "keep"   # LLM estimates; drop only if estimate < floor
+
+  international:
+    geographies: ["united kingdom", "uk", "london", "manchester", "cambridge", "edinburgh", "oxford", "bristol", "leeds", "birmingham", "dubai", "abu dhabi", "uae", "united arab emirates", "germany", "berlin", "munich", "netherlands", "amsterdam", "ireland", "dublin", "europe"]
+    remote_ok: true
+    visa_required: true
+    visa_no_action: "drop"              # hard drop, no exceptions
+    visa_unknown_action: "keep"
+    priority_countries: ["united kingdom", "united arab emirates"]
+
+# Regexes that hard-drop a listing at pre-filter (before any LLM cost) when the
+# description explicitly rules out sponsorship. International pipeline only.
+visa_no_patterns:
+  - "must have (the |existing )?(right to work|work author(?:i[sz])ation|work permit)"
+  - "(cannot|can'?t|unable to|will not|won'?t|do not|don'?t)\\s+(\\w+\\s+){0,3}sponsor"
+  - "no visa sponsorship"
+  - "not (able to |in a position to )?sponsor"
+  - "existing work (visa|permit) required"
+  - "must be (eligible|authoris?ed) to work"
+  - "not (offering|providing) (visa )?sponsorship"
+  - "without (visa )?sponsorship"
+  - "sponsorship is not available"
