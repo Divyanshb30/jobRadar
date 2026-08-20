@@ -87,11 +87,27 @@ The run **degrades instead of crashing**: any source missing its key is skipped,
 any failing API is logged and ignored, and if `GEMINI_API_KEY` is absent the
 scorer falls back to a deterministic rule-based scorer so you still get output.
 
-### 4. Automate
+Results are written to **two tabs** in the tracker spreadsheet — `India` and
+`International` — and the email digest keeps the same split.
 
-Push to GitHub, add every secret under **Settings → Secrets and variables →
-Actions**, and the workflow runs daily at 4:00 AM IST (`workflow_dispatch` lets
-you trigger it manually). Logs upload as an artifact on every run.
+### 4. Automate — pick one
+
+**A. Windows Task Scheduler (local; simplest, uses your `.env`).** Runs only
+while the PC is on. `run_daily.ps1` invokes the venv Python and logs to `logs/`.
+Register a 4:00 AM daily task (run once, in PowerShell):
+
+```powershell
+schtasks /Create /SC DAILY /ST 04:00 /TN "JobRadar" /TR "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\college\PROJECTS\ML\jobRadar\run_daily.ps1\""
+```
+
+Test it immediately with `schtasks /Run /TN "JobRadar"`; remove it with
+`schtasks /Delete /TN "JobRadar" /F`.
+
+**B. GitHub Actions (cloud; runs even when your PC is off).** Push to GitHub, add
+every secret under **Settings → Secrets and variables → Actions**, and the
+workflow runs daily at 4:00 AM IST (`workflow_dispatch` triggers it manually).
+For `GOOGLE_SHEETS_CREDENTIALS` paste the **JSON contents** (not a file path —
+the `credentials/` folder is git-ignored). Logs upload as an artifact.
 
 ## Diagnostics
 

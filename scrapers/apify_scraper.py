@@ -31,9 +31,10 @@ except Exception:  # pragma: no cover
     ApifyClient = None  # type: ignore
 
 # Locations / countries per pipeline, per actor convention.
-INDEED_COUNTRIES = {"india": ["in"], "international": ["uk", "ae"]}   # ISO-ish
+INDEED_COUNTRIES = {"india": ["in"], "international": ["uk", "ae", "sg"]}  # ISO-ish
 LINKEDIN_LOCATIONS = {"india": ["India"],
-                      "international": ["United Kingdom", "United Arab Emirates"]}
+                      "international": ["United Kingdom", "United Arab Emirates",
+                                        "Singapore"]}
 GLASSDOOR_LOCATIONS = LINKEDIN_LOCATIONS
 BAYT_COUNTRIES = {"international": ["United Arab Emirates"]}          # full names
 
@@ -43,6 +44,29 @@ def _first(d: dict[str, Any], *keys: str, default: Any = "") -> Any:
         if k in d and d[k] not in (None, ""):
             return d[k]
     return default
+
+
+def _loc_str(value: Any) -> str:
+    """Normalize a location that may arrive as a plain string or a dict.
+
+    Different actors return different shapes:
+      * LinkedIn/Glassdoor: {"name": "London, England", ...}
+      * Indeed geo object:   {"city": "", "admin1Code": "KA",
+                              "countryName": "India", ...}
+    We prefer a ready-made display name; otherwise assemble city + country.
+    """
+    if not isinstance(value, dict):
+        return str(value or "")
+    for k in ("displayName", "name", "formattedLocation", "label", "text"):
+        if value.get(k):
+            return str(value[k])
+    parts = [value.get("city"),
+             value.get("countryName") or value.get("country")]
+    parts = [str(p) for p in parts if p]
+    if parts:
+        return ", ".join(parts)
+    # Last resort: any country hint, never the raw dict repr.
+    return str(value.get("countryName") or value.get("countryCode") or "")
 
 
 def _map_item(item: dict[str, Any], source_name: str) -> Optional[RawJob]:
@@ -56,11 +80,8 @@ def _map_item(item: dict[str, Any], source_name: str) -> Optional[RawJob]:
     if isinstance(company, dict):
         company = _first(company, "name", "displayName", "title",
                          default=str(company))
-    location = _first(item, "location", "jobLocation", "place", "city",
-                      "formattedLocation")
-    if isinstance(location, dict):
-        location = _first(location, "displayName", "city", "country",
-                          default=str(location))
+    location = _loc_str(_first(item, "location", "jobLocation", "place", "city",
+                               "formattedLocation"))
     description = _first(item, "description", "descriptionText", "jobDescription",
                          "descriptionHtml", "snippet", "jobDescriptionText")
     url = _first(item, "url", "jobUrl", "link", "applyUrl", "externalApplyLink",

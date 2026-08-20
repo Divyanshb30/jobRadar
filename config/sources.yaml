@@ -43,7 +43,8 @@ free_apis:
     app_id_env: ADZUNA_APP_ID
     app_key_env: ADZUNA_APP_KEY
     # Adzuna has NO UAE ('ae') coverage — including it just returns 404s.
-    countries: ["gb", "in"]
+    # Singapore ('sg') IS supported.
+    countries: ["gb", "in", "sg"]
     max_results_per_query: 50
     max_days_old: 2
 

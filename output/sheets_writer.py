@@ -1,11 +1,14 @@
 """Layer 4 — Google Sheets writer (gspread + service account).
 
-One bulk ``append_rows`` per run, no per-row calls. Reads existing dedup hashes
-from column Q first so a job already in the tracker is never re-appended.
+Writes into ONE spreadsheet ("JobRadar Tracker") with TWO worksheets/tabs:
+"India" and "International". Each ScoredJob is routed to the tab matching its
+pipeline. Dedup reads hashes from both tabs so the same posting is never
+re-appended regardless of which tab it lives in.
 
 Credentials come from ``GOOGLE_SHEETS_CREDENTIALS`` as either the raw
-service-account JSON (one line) or a path to a JSON file. The target sheet is
-identified by ``JOBRADAR_SHEET_ID`` (preferred) or by title.
+service-account JSON (one line) or a path to a JSON file (resolved relative to
+the current dir or the project root). The spreadsheet is identified by
+``JOBRADAR_SHEET_ID`` (preferred) or by title.
 """
 
 from __future__ import annotations
@@ -15,7 +18,7 @@ import logging
 from pathlib import Path
 
 from common import config
-from processing.models import ScoredJob
+from processing.models import Pipeline, ScoredJob
 
 log = logging.getLogger("jobradar")
 
@@ -27,7 +30,11 @@ except Exception:  # pragma: no cover
     _GSPREAD_OK = False
 
 SPREADSHEET_TITLE = "JobRadar Tracker"
-WORKSHEET_TITLE = "Tracker"
+# One tab per pipeline.
+WORKSHEETS: dict[Pipeline, str] = {
+    Pipeline.INDIA: "India",
+    Pipeline.INTERNATIONAL: "International",
+}
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets",
           "https://www.googleapis.com/auth/drive"]
 DEDUP_COL = 17  # column Q
@@ -42,15 +49,18 @@ def load_service_account_info() -> dict | None:
     raw = config.env("GOOGLE_SHEETS_CREDENTIALS")
     if not raw:
         return None
-    # A filesystem path?
-    p = Path(raw)
-    if len(raw) < 500 and p.exists():
-        raw = p.read_text(encoding="utf-8")
+    # A filesystem path? Try it as given, then relative to the project root
+    # (so it works no matter which directory main.py is launched from).
+    if len(raw) < 500:
+        for cand in (Path(raw), Path(config.ROOT) / raw):
+            if cand.exists():
+                raw = cand.read_text(encoding="utf-8")
+                break
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
         log.error("[sheets] GOOGLE_SHEETS_CREDENTIALS is neither valid JSON "
-                  "nor a readable file path")
+                  "nor a readable file path (looked in cwd and %s)", config.ROOT)
         return None
 
 
@@ -83,69 +93,91 @@ _QUOTA_HELP = (
 )
 
 
-def open_worksheet(create: bool = False):
+def open_spreadsheet(create: bool = False):
+    """Open the JobRadar spreadsheet (by id, else by title, else create)."""
     gc = client()
     sheet_id = config.env("JOBRADAR_SHEET_ID")
     if sheet_id:
-        sh = gc.open_by_key(sheet_id)
-    else:
-        try:
-            sh = gc.open(SPREADSHEET_TITLE)
-        except gspread.SpreadsheetNotFound:
-            if not create:
-                raise
-            try:
-                sh = gc.create(SPREADSHEET_TITLE)
-            except gspread.exceptions.APIError as exc:
-                if "quota" in str(exc).lower():
-                    raise RuntimeError(
-                        _QUOTA_HELP.format(email=service_account_email()
-                                           or "<service-account-email>")) from exc
-                raise
-            log.info("[sheets] created spreadsheet %s (id=%s)",
-                     SPREADSHEET_TITLE, sh.id)
+        return gc.open_by_key(sheet_id)
     try:
-        return sh.worksheet(WORKSHEET_TITLE)
+        return gc.open(SPREADSHEET_TITLE)
+    except gspread.SpreadsheetNotFound:
+        if not create:
+            raise
+        try:
+            sh = gc.create(SPREADSHEET_TITLE)
+        except gspread.exceptions.APIError as exc:
+            if "quota" in str(exc).lower():
+                raise RuntimeError(_QUOTA_HELP.format(
+                    email=service_account_email() or "<service-account-email>")
+                ) from exc
+            raise
+        log.info("[sheets] created spreadsheet %s (id=%s)", SPREADSHEET_TITLE, sh.id)
+        return sh
+
+
+def open_worksheet(sh, title: str, create: bool = False):
+    """Open one worksheet/tab by title, creating it if asked."""
+    try:
+        return sh.worksheet(title)
     except gspread.WorksheetNotFound:
         if not create:
             raise
-        return sh.add_worksheet(WORKSHEET_TITLE, rows=2000, cols=len(HEADERS))
+        return sh.add_worksheet(title, rows=2000, cols=len(HEADERS))
 
 
 class SheetsWriter:
     def __init__(self):
-        self._ws = None
+        self._sh = None
+        self._ws: dict[Pipeline, object] = {}
 
     @property
     def available(self) -> bool:
         return _GSPREAD_OK and load_service_account_info() is not None
 
     @property
-    def worksheet(self):
-        if self._ws is None:
-            self._ws = open_worksheet(create=False)
-        return self._ws
+    def spreadsheet(self):
+        if self._sh is None:
+            self._sh = open_spreadsheet(create=False)
+        return self._sh
+
+    def worksheet(self, pipeline: Pipeline):
+        if pipeline not in self._ws:
+            self._ws[pipeline] = open_worksheet(
+                self.spreadsheet, WORKSHEETS[pipeline], create=True)
+        return self._ws[pipeline]
 
     def read_existing_hashes(self) -> set[str]:
-        try:
-            col = self.worksheet.col_values(DEDUP_COL)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("[sheets] could not read existing hashes: %s", exc)
-            return set()
-        # Drop the header cell.
-        return {h for h in col[1:] if h}
+        """Union of dedup hashes across both tabs."""
+        hashes: set[str] = set()
+        for pipeline in WORKSHEETS:
+            try:
+                col = self.worksheet(pipeline).col_values(DEDUP_COL)
+                hashes.update(h for h in col[1:] if h)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("[sheets] could not read hashes from %s tab: %s",
+                            WORKSHEETS[pipeline], exc)
+        return hashes
 
     def bulk_append(self, jobs: list[ScoredJob]) -> int:
+        """Group jobs by pipeline and append each group to its own tab."""
         if not jobs:
             log.info("[sheets] nothing to append")
             return 0
-        rows = [j.to_tracker_row() for j in jobs]
-        self.worksheet.append_rows(rows, value_input_option="USER_ENTERED")
-        log.info("[sheets] appended %d rows", len(rows))
-        return len(rows)
+        total = 0
+        for pipeline, tab in WORKSHEETS.items():
+            group = [j for j in jobs if j.pipeline == pipeline]
+            if not group:
+                continue
+            rows = [j.to_tracker_row() for j in group]
+            self.worksheet(pipeline).append_rows(
+                rows, value_input_option="USER_ENTERED")
+            log.info("[sheets] appended %d rows to '%s' tab", len(rows), tab)
+            total += len(rows)
+        return total
 
     def sheet_url(self) -> str:
         try:
-            return self.worksheet.spreadsheet.url
+            return self.spreadsheet.url
         except Exception:  # noqa: BLE001
             return ""

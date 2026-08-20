@@ -55,7 +55,7 @@ pipelines:
     salary_undisclosed_action: "keep"   # LLM estimates; drop only if estimate < floor
 
   international:
-    geographies: ["united kingdom", "uk", "london", "manchester", "cambridge", "edinburgh", "oxford", "bristol", "leeds", "birmingham", "dubai", "abu dhabi", "uae", "united arab emirates", "germany", "berlin", "munich", "netherlands", "amsterdam", "ireland", "dublin", "europe"]
+    geographies: ["united kingdom", "uk", "london", "manchester", "cambridge", "edinburgh", "oxford", "bristol", "leeds", "birmingham", "dubai", "abu dhabi", "uae", "united arab emirates", "germany", "berlin", "munich", "netherlands", "amsterdam", "ireland", "dublin", "singapore", "europe"]
     remote_ok: true
     visa_required: true
     visa_no_action: "drop"              # hard drop, no exceptions

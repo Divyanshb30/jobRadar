@@ -18,7 +18,8 @@ import argparse
 import logging
 
 from common import logging_setup
-from output.sheets_writer import HEADERS, open_worksheet, service_account_email
+from output.sheets_writer import (HEADERS, WORKSHEETS, open_spreadsheet,
+                                  open_worksheet, service_account_email)
 
 log = logging.getLogger("jobradar")
 
@@ -126,22 +127,31 @@ def main() -> None:
         print("(A sheet referenced by JOBRADAR_SHEET_ID must be shared with it "
               "as Editor.)\n")
 
-    ws = open_worksheet(create=True)
-    sheet = ws.spreadsheet
+    sheet = open_spreadsheet(create=True)
 
-    # Headers.
-    ws.update([HEADERS], "A1")
-    ws.format("A1:Q1", {
-        "textFormat": {"bold": True},
-        "backgroundColor": {"red": 0.12, "green": 0.16, "blue": 0.22},
-        "horizontalAlignment": "LEFT",
-    })
-    # Header text is dark-on-dark by default; make it white.
-    ws.format("A1:Q1", {"textFormat": {"bold": True,
-              "foregroundColor": {"red": 1, "green": 1, "blue": 1}}})
+    # Build both pipeline tabs with identical schema + formatting.
+    for pipeline, title in WORKSHEETS.items():
+        ws = open_worksheet(sheet, title, create=True)
+        ws.update([HEADERS], "A1")
+        ws.format("A1:Q1", {
+            "textFormat": {"bold": True},
+            "backgroundColor": {"red": 0.12, "green": 0.16, "blue": 0.22},
+            "horizontalAlignment": "LEFT",
+        })
+        # Header text is dark-on-dark by default; make it white.
+        ws.format("A1:Q1", {"textFormat": {"bold": True,
+                  "foregroundColor": {"red": 1, "green": 1, "blue": 1}}})
+        sheet.batch_update({"requests": build_requests(ws.id)})
+        log.info("Prepared '%s' tab (headers, formatting, freeze, hidden Q)",
+                 title)
 
-    sheet.batch_update({"requests": build_requests(ws.id)})
-    log.info("Applied headers, formatting, freeze, and hidden dedup column")
+    # Remove the default empty "Sheet1"/"Sheet" tab if it's still around.
+    for junk in ("Sheet1", "Sheet"):
+        try:
+            sheet.del_worksheet(sheet.worksheet(junk))
+            log.info("Removed default '%s' tab", junk)
+        except Exception:  # noqa: BLE001 - not present, or can't delete last sheet
+            pass
 
     if args.share:
         sheet.share(args.share, perm_type="user", role="writer")
