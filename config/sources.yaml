@@ -36,6 +36,10 @@ apify:
       cost_per_1k: 0.40
       pipelines: [international]
       max_items: 30
+    wellfound:
+      id: "crawlerbros/wellfound-scraper"
+      pipelines: [india, international]
+      max_items: 30
 
 free_apis:
   adzuna:

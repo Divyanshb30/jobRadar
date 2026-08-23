@@ -48,6 +48,8 @@ def build_scrapers() -> list[BaseScraper]:
         ApifyScraper("naukri", "india"),
         ApifyScraper("bayt", "international"),
         ApifyScraper("glassdoor", "international"),
+        ApifyScraper("wellfound", "india"),
+        ApifyScraper("wellfound", "international"),
         AdzunaScraper(),
         ReedScraper(),
         RemoteOKScraper(),

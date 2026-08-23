@@ -1,12 +1,12 @@
 # JobRadar
 
-Automated, near-zero-cost job finder. Scrapes 10 sources daily, scores every
-listing with Gemini 2.0 Flash (experience gate, visa check, role-fit), writes
-scored results to a Google Sheet, and emails a digest — all on free tiers +
-~$5/month of Apify.
+Automated, near-zero-cost job finder. Scrapes 11 sources daily, scores every
+listing with an LLM ladder (Groq → Gemini) — experience gate, visa check,
+role-fit — writes scored results to a Google Sheet, and emails a digest, all on
+free tiers + ~$5/month of Apify.
 
-Two pipelines: **India** (≥25 LPA floor) and **International** (UK/UAE/Europe/
-Remote, visa-NO hard-dropped). Target: 50–75 scored, relevant jobs/day.
+Two pipelines: **India** (≥25 LPA floor) and **International** (UK/UAE/Singapore/
+Europe/Remote, visa-NO hard-dropped). Target: 50–75 scored, relevant jobs/day.
 
 ```
 scrape → pre-filter → dedup → LLM score → Google Sheet + email digest
@@ -17,8 +17,8 @@ scrape → pre-filter → dedup → LLM score → Google Sheet + email digest
 ```
 jobRadar/
 ├── config/            sources.yaml, pipelines.yaml, scoring.yaml, .env.example
-├── scrapers/          base + Apify (Indeed/LinkedIn/Naukri/Bayt/Glassdoor) +
-│                      Adzuna, Reed, RemoteOK, Serper, Gmail alerts
+├── scrapers/          base + Apify (Indeed/LinkedIn/Naukri/Bayt/Glassdoor/
+│                      Wellfound) + Adzuna, Reed, RemoteOK, Serper, Gmail alerts
 ├── processing/        models (Pydantic) · prefilter · dedup · scorer (Gemini)
 ├── output/            sheets_writer · digest_builder · gmail_sender
 ├── scripts/           gmail_authorize.py (one-time OAuth token)

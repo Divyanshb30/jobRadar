@@ -43,7 +43,10 @@ generic SWE, 50 for hybrid, 90+ for core ML/AI.
 - tech_stack_match (0-100): overlap with Python, LLMs, RAG, agents, Azure/AWS, MLOps, NLP, \
 transformers, PyTorch.
 - visa_status: "YES" if sponsorship is offered/implied, "NO" if right-to-work/no-sponsorship \
-is required, "UNKNOWN" if unstated. Return "N/A" for India jobs.
+is required, "UNKNOWN" if genuinely unclear. Return "N/A" for India jobs. IMPORTANT: for UAE, \
+Gulf, and Singapore roles employer work-visa sponsorship is standard practice, so treat \
+UNSTATED sponsorship there as "YES" unless the ad says otherwise; for UK/Europe, unstated \
+stays "UNKNOWN".
 - salary_estimate: for INDIA jobs with no disclosed salary, estimate a likely CTC range in \
 LPA (e.g. "18-25 LPA") from role/company/location; else null.
 - red_flags: one short string ONLY for a genuinely concerning issue. Do NOT flag a notice \

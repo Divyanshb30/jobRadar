@@ -174,6 +174,21 @@ class ApifyScraper(BaseScraper):
                     specs.append({"max_results": lim, "keyword": title,
                                   "country": country, "job_type": "all"})
 
+        elif self.actor_key == "wellfound":
+            # Wellfound is remote/startup-heavy with client-side filters. India
+            # runs filter to India; international runs pull remote roles (which
+            # route to Intl in the pre-filter). Keep filters light; the pipeline
+            # gates handle the rest.
+            for title in q:
+                spec: dict[str, Any] = {"keyword": title, "jobType": "full-time",
+                                        "sort": "newest", "maxItems": lim,
+                                        "includeNoSalary": True}
+                if self.pipeline == "india":
+                    spec["location"] = "India"
+                else:
+                    spec["remoteOnly"] = True
+                specs.append(spec)
+
         else:
             log.warning("[apify] no input builder for actor '%s'", self.actor_key)
         return specs
