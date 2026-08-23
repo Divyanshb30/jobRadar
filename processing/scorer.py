@@ -35,8 +35,9 @@ For EACH job below return one JSON object with these fields:
 - index (int): copy the job's index exactly.
 - years_required (int): the MINIMUM years of professional experience the job requires. Use 0 \
 if it is explicitly entry-level/graduate/junior or states no experience requirement. If it \
-says e.g. "3+ years", "5-7 years", "minimum 4 years", return the lower bound (3, 5, 4). Judge \
-from the requirement text, not from seniority words alone.
+says e.g. "3+ years", "5-7 years", "minimum 4 years", return the lower bound (3, 5, 4). A title \
+containing Senior, Sr, Lead, Staff, Principal, or Architect implies at least 3 years — return \
+3 or more for those UNLESS the description explicitly says it accepts 0-2 years / entry level.
 - experience_fit (0-100): 90+ if clearly 0-2 YoE, 50 if ambiguous, 0 if it needs 3+ years.
 - role_fit (0-100): Is this a real AI/ML/GenAI/DS role? 0 for pure BI/reporting/analytics or \
 generic SWE, 50 for hybrid, 90+ for core ML/AI.

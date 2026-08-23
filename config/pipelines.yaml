@@ -28,7 +28,7 @@ target_roles:
 title_keywords_regex: "(ai\\s*engineer|applied\\s*ai|machine\\s*learn|ml\\s*engineer|genai|generative\\s*ai|agentic|nlp|mlops|deep\\s*learn|llm|data\\s*scien|artificial\\s*intel)"
 
 # If the title matches this, drop it (senior/lead/etc. above the experience gate).
-title_exclusion_regex: "(senior|staff|principal|\\blead\\b|director|head\\s+of|vp\\s+of|\\bmanager\\b|\\bintern\\b|phd\\s+required|(?:1[0-9]|[3-9])\\+\\s*years)"
+title_exclusion_regex: "(senior|\\bsr\\.?\\b|staff|principal|\\blead\\b|\\barchitect\\b|director|head\\s+of|vp\\s+of|\\bmanager\\b|\\bintern\\b|phd\\s+required|(?:1[0-9]|[3-9])\\+\\s*years)"
 
 # Aggregator / search-index pages (mostly from Google Jobs organic results) are
 # not real listings — e.g. "1597 NLP engineer jobs in India", "ML Engineer Jobs,
