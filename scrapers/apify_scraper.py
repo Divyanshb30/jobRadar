@@ -175,18 +175,20 @@ class ApifyScraper(BaseScraper):
                                   "country": country, "job_type": "all"})
 
         elif self.actor_key == "wellfound":
-            # Wellfound is remote/startup-heavy with client-side filters. India
-            # runs filter to India; international runs pull remote roles (which
-            # route to Intl in the pre-filter). Keep filters light; the pipeline
-            # gates handle the rest.
+            # blackfalcondata/wellfound-scraper: full descriptions inline,
+            # experienceLevel="entry" (0-2 YoE) filters seniors at the source.
+            # India -> India-located; International -> remote startup roles with
+            # visaSponsorship=false (drops explicit no-sponsorship, keeps
+            # YES + UNKNOWN — matching our visa policy).
             for title in q:
-                spec: dict[str, Any] = {"keyword": title, "jobType": "full-time",
-                                        "sort": "newest", "maxItems": lim,
-                                        "includeNoSalary": True}
+                spec: dict[str, Any] = {"query": title, "experienceLevel": "entry",
+                                        "jobType": "fulltime", "maxResults": lim,
+                                        "descriptionMaxLength": 1200}
                 if self.pipeline == "india":
-                    spec["location"] = "India"
+                    spec["location"] = ["India"]
                 else:
-                    spec["remoteOnly"] = True
+                    spec["remote"] = True
+                    spec["visaSponsorship"] = False
                 specs.append(spec)
 
         else:

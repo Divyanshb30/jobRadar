@@ -12,9 +12,9 @@ gemini:
     # -- Groq (only used if GROQ_API_KEY is set; skipped otherwise). Free tier
     #    is fast and far more generous than Gemini's, so it leads the ladder.
     #    Prefix "groq:" routes the entry to the Groq provider. --
-    - "groq:llama-3.3-70b-versatile"
     - "groq:openai/gpt-oss-120b"
-    - "groq:llama-3.1-8b-instant"
+    - "groq:qwen/qwen3.6-27b"
+    - "groq:openai/gpt-oss-20b"
     # -- top-quality Gemini flash (best judgement; ~5 RPM / 20 RPD each) --
     - "gemini-3.7-flash"
     - "gemini-3.6-flash"

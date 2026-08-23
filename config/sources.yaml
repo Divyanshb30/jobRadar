@@ -37,7 +37,9 @@ apify:
       pipelines: [international]
       max_items: 30
     wellfound:
-      id: "crawlerbros/wellfound-scraper"
+      # Visa-aware actor: full descriptions inline, entry-level filter, and a
+      # visaSponsorship stance filter used on the International pipeline.
+      id: "blackfalcondata/wellfound-scraper"
       pipelines: [india, international]
       max_items: 30
 
