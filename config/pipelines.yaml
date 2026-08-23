@@ -51,7 +51,7 @@ pipelines:
     geographies: ["india", "bangalore", "bengaluru", "mumbai", "delhi", "hyderabad", "pune", "chennai", "noida", "gurgaon", "gurugram", "kolkata", "ahmedabad"]
     remote_ok: true
     visa_required: false
-    min_ctc_lpa: 25
+    min_ctc_lpa: 15   # realistic floor for 0-2 YoE AI/ML in India (25 dropped almost all juniors)
     salary_undisclosed_action: "keep"   # LLM estimates; drop only if estimate < floor
 
   international:

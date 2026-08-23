@@ -48,9 +48,9 @@ free_apis:
     base_url: "https://api.adzuna.com/v1/api/jobs"
     app_id_env: ADZUNA_APP_ID
     app_key_env: ADZUNA_APP_KEY
-    # Adzuna has NO UAE ('ae') coverage — including it just returns 404s.
-    # Singapore ('sg') IS supported.
-    countries: ["gb", "in", "sg"]
+    # Adzuna has NO UAE ('ae') or Ireland ('ie') coverage — they 404.
+    # Singapore ('sg'), Germany ('de'), Netherlands ('nl') ARE supported.
+    countries: ["gb", "in", "sg", "de", "nl"]
     max_results_per_query: 50
     max_days_old: 2
 

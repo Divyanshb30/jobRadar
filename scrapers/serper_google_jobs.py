@@ -34,7 +34,8 @@ class SerperGoogleJobsScraper(BaseScraper):
     def _queries(self) -> list[str]:
         roles = ["AI Engineer", "Machine Learning Engineer", "ML Engineer",
                  "NLP Engineer", "Data Scientist"]
-        geos = ["India", "United Kingdom", "Dubai UAE", "Singapore", "Remote"]
+        geos = ["India", "United Kingdom", "Dubai UAE", "Singapore",
+                "Germany", "Netherlands", "Ireland", "Remote"]
         budget = int(self.cfg.get("queries_per_day", 80))
         queries = [f'"{r}" jobs {g}' for g in geos for r in roles]
         return queries[:budget]

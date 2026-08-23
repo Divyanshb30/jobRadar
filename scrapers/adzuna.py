@@ -76,7 +76,8 @@ class AdzunaScraper(BaseScraper):
             url=r.get("redirect_url", ""),
             salary_min=r.get("salary_min"),
             salary_max=r.get("salary_max"),
-            currency={"gb": "GBP", "in": "INR", "sg": "SGD"}.get(country),
+            currency={"gb": "GBP", "in": "INR", "sg": "SGD",
+                      "de": "EUR", "nl": "EUR"}.get(country),
             posted_at=self._parse_dt(r.get("created")),
             raw=r,
         )

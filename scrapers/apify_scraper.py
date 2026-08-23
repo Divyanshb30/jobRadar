@@ -31,10 +31,12 @@ except Exception:  # pragma: no cover
     ApifyClient = None  # type: ignore
 
 # Locations / countries per pipeline, per actor convention.
-INDEED_COUNTRIES = {"india": ["in"], "international": ["uk", "ae", "sg"]}  # ISO-ish
+INDEED_COUNTRIES = {"india": ["in"],
+                    "international": ["uk", "ae", "sg", "de", "nl", "ie"]}  # ISO-ish
 LINKEDIN_LOCATIONS = {"india": ["India"],
                       "international": ["United Kingdom", "United Arab Emirates",
-                                        "Singapore"]}
+                                        "Singapore", "Germany", "Netherlands",
+                                        "Ireland"]}
 GLASSDOOR_LOCATIONS = LINKEDIN_LOCATIONS
 BAYT_COUNTRIES = {"international": ["United Arab Emirates"]}          # full names
 
