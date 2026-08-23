@@ -101,6 +101,7 @@ class ScoredJob(BaseModel):
     raw: RawJob
 
     experience_fit: int = 0          # 0-100
+    years_required: int = 0          # min YoE the job requires (0 = entry/unstated)
     role_fit: int = 0                # 0-100
     tech_stack_match: int = 0        # 0-100
     visa_status: VisaStatus = VisaStatus.NA
@@ -109,6 +110,14 @@ class ScoredJob(BaseModel):
 
     composite_score: int = 0         # 0-100 weighted
     verdict: Verdict = Verdict.DROP
+
+    @field_validator("years_required", mode="before")
+    @classmethod
+    def _years(cls, v: Any) -> int:
+        try:
+            return max(0, min(50, int(round(float(v)))))
+        except (TypeError, ValueError):
+            return 0
 
     @field_validator("experience_fit", "role_fit", "tech_stack_match",
                       "composite_score", mode="before")

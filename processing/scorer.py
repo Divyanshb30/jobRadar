@@ -26,15 +26,19 @@ from processing.models import (Pipeline, RawJob, ScoredJob, Verdict, VisaStatus)
 
 log = logging.getLogger("jobradar")
 
-_PROMPT_HEADER = """You are a job relevance scorer for an ML Engineer with 1 year of \
-experience targeting AI/ML/GenAI/Data Science roles in the UK, UAE, India, and remote. \
-Only 0-2 years of experience is acceptable.
+_PROMPT_HEADER = """You are a STRICT job relevance scorer for an ML Engineer with 1 year \
+of experience, targeting AI/ML/GenAI/Data Science roles in the UK, UAE, Singapore, India, \
+Europe, and remote. ONLY roles that accept 0-2 years of experience are acceptable — this is \
+a hard requirement, not a preference.
 
 For EACH job below return one JSON object with these fields:
 - index (int): copy the job's index exactly.
-- experience_fit (0-100): Is this genuinely entry/junior (0-2 YoE)? 0 if it requires 3+ \
-years, 50 if ambiguous, 90+ if explicitly junior.
-- role_fit (0-100): Is this a real AI/ML/GenAI/DS role? 0 for pure BI/reporting/analytics/\
+- years_required (int): the MINIMUM years of professional experience the job requires. Use 0 \
+if it is explicitly entry-level/graduate/junior or states no experience requirement. If it \
+says e.g. "3+ years", "5-7 years", "minimum 4 years", return the lower bound (3, 5, 4). Judge \
+from the requirement text, not from seniority words alone.
+- experience_fit (0-100): 90+ if clearly 0-2 YoE, 50 if ambiguous, 0 if it needs 3+ years.
+- role_fit (0-100): Is this a real AI/ML/GenAI/DS role? 0 for pure BI/reporting/analytics or \
 generic SWE, 50 for hybrid, 90+ for core ML/AI.
 - tech_stack_match (0-100): overlap with Python, LLMs, RAG, agents, Azure/AWS, MLOps, NLP, \
 transformers, PyTorch.
@@ -42,7 +46,9 @@ transformers, PyTorch.
 is required, "UNKNOWN" if unstated. Return "N/A" for India jobs.
 - salary_estimate: for INDIA jobs with no disclosed salary, estimate a likely CTC range in \
 LPA (e.g. "18-25 LPA") from role/company/location; else null.
-- red_flags: one short string if anything is concerning, else null.
+- red_flags: one short string ONLY for a genuinely concerning issue. Do NOT flag a notice \
+period of 30 days or less, and do NOT flag Singapore / UK / UAE / India / Europe / remote \
+locations — those are all in scope. Otherwise null.
 
 Return ONLY a JSON array of these objects. No prose, no markdown fences.
 
@@ -59,6 +65,11 @@ class Scorer:
         self.visa_map = sc["visa_score_map"]
         self.tech_keywords = [k.lower() for k in sc["tech_stack_keywords"]]
         self.api_key = config.env(self.gcfg["api_key_env"])
+        # Optional second provider: Groq (OpenAI-compatible, generous free tier).
+        # Any ladder entry prefixed "groq:" is routed here.
+        self.groq_key = config.env(self.gcfg.get("groq_api_key_env", "GROQ_API_KEY"))
+        self.groq_endpoint = self.gcfg.get(
+            "groq_endpoint", "https://api.groq.com/openai/v1/chat/completions")
         self.batch_size = int(self.gcfg.get("batch_size", 10))
         self.max_desc = int(self.gcfg.get("max_description_chars", 500))
         self.min_interval = float(self.gcfg.get("min_request_interval_secs", 0))
@@ -76,9 +87,9 @@ class Scorer:
     def score(self, jobs: list[RawJob]) -> list[ScoredJob]:
         if not jobs:
             return []
-        use_llm = bool(self.api_key)
+        use_llm = bool(self.api_key or self.groq_key)
         if not use_llm:
-            log.warning("[scorer] GEMINI_API_KEY absent -> rule-based fallback")
+            log.warning("[scorer] no LLM key (GEMINI/GROQ) -> rule-based fallback")
 
         if use_llm:
             log.info("[scorer] model ladder: %s", " -> ".join(self.models))
@@ -128,11 +139,20 @@ class Scorer:
 
     def _call_model(self, model: str, prompt: str, batch: list[RawJob]
                     ) -> tuple[str, list[dict[str, Any] | None] | None]:
-        """Call one model with retries. Returns (outcome, data):
-          ("ok", aligned_scores)   — success
-          ("daily-quota", None)    — RPD exhausted; advance immediately
-          ("unavailable", None)    — RPM/5xx persisted through retries; advance
+        """Dispatch to the right provider. Returns (outcome, data):
+          ("ok", aligned_scores)     — success
+          ("daily-quota", None)      — RPD exhausted; advance immediately
+          ("account-exhausted", None)— billing/credit block; abort ladder
+          ("unavailable", None)      — RPM/5xx/no-key; advance
         """
+        if model.startswith("groq:"):
+            return self._call_groq(model[len("groq:"):], prompt, batch)
+        if not self.api_key:
+            return "unavailable", None      # Gemini model but no Gemini key
+        return self._call_gemini(model, prompt, batch)
+
+    def _call_gemini(self, model: str, prompt: str, batch: list[RawJob]
+                     ) -> tuple[str, list[dict[str, Any] | None] | None]:
         endpoint = self.gcfg["endpoint"].format(model=model)
         gen_config: dict[str, Any] = {
             "temperature": float(self.gcfg.get("temperature", 0.1)),
@@ -186,6 +206,57 @@ class Scorer:
             except (requests.RequestException, ValueError, KeyError) as exc:
                 log.warning("[scorer] %s attempt %d/%d failed: %s",
                             model, attempt, retries, exc)
+                time.sleep(backoff)
+        return "unavailable", None
+
+    def _call_groq(self, model: str, prompt: str, batch: list[RawJob]
+                   ) -> tuple[str, list[dict[str, Any] | None] | None]:
+        """Call Groq's OpenAI-compatible chat endpoint. Same outcome contract."""
+        if not self.groq_key:
+            return "unavailable", None      # Groq model but no GROQ_API_KEY
+        headers = {"Authorization": f"Bearer {self.groq_key}",
+                   "Content-Type": "application/json"}
+        payload = {
+            "model": model,
+            "temperature": float(self.gcfg.get("temperature", 0.1)),
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        retries = int(self.gcfg.get("max_retries", 3))
+        backoff = int(self.gcfg.get("retry_backoff_secs", 5))
+        tag = f"groq:{model}"
+
+        for attempt in range(1, retries + 1):
+            try:
+                self._throttle()
+                resp = requests.post(self.groq_endpoint, headers=headers,
+                                     json=payload, timeout=90)
+                if resp.status_code == 429:
+                    body = resp.text.lower()
+                    # Groq signals daily exhaustion via "per day" / TPD / RPD.
+                    if "per day" in body or "rpd" in body or "tpd" in body:
+                        log.warning("[scorer] %s daily quota reached", tag)
+                        return "daily-quota", None
+                    wait = backoff * attempt
+                    log.warning("[scorer] %s rate-limited; backoff %ss", tag, wait)
+                    time.sleep(wait)
+                    continue
+                if resp.status_code in (500, 502, 503):
+                    wait = backoff * attempt
+                    log.warning("[scorer] %s HTTP %s (transient); backoff %ss",
+                                tag, resp.status_code, wait)
+                    time.sleep(wait)
+                    continue
+                if resp.status_code != 200:
+                    log.error("[scorer] %s HTTP %s: %s", tag,
+                              resp.status_code, resp.text[:200])
+                    return "unavailable", None
+                content = resp.json()["choices"][0]["message"]["content"]
+                parsed = self._parse_scores(content)
+                return "ok", self._align(parsed, batch)
+            except (requests.RequestException, ValueError, KeyError,
+                    IndexError) as exc:
+                log.warning("[scorer] %s attempt %d/%d failed: %s",
+                            tag, attempt, retries, exc)
                 time.sleep(backoff)
         return "unavailable", None
 
@@ -258,6 +329,7 @@ class Scorer:
         sj = ScoredJob(
             raw=job,
             experience_fit=raw.get("experience_fit", 0),
+            years_required=raw.get("years_required", 0),
             role_fit=raw.get("role_fit", 0),
             tech_stack_match=raw.get("tech_stack_match", 0),
             visa_status=visa,
@@ -322,10 +394,27 @@ class Scorer:
 
     def _apply_hard_rules(self, scored: list[ScoredJob]) -> list[ScoredJob]:
         min_score = self.thresholds["minimum_composite"]
+        max_years = int(self.thresholds.get("max_years_experience", 2))
+        min_role = int(self.thresholds.get("min_role_fit", 0))
+        min_exp = int(self.thresholds.get("min_experience_fit", 0))
         floor_lpa = float(config.pipelines()["pipelines"]["india"]["min_ctc_lpa"])
-        kept, drop_visa, drop_salary, drop_thresh = [], 0, 0, 0
+        kept = []
+        drop_years = drop_role = drop_visa = drop_salary = drop_thresh = 0
 
         for sj in scored:
+            # Hard experience gate — the whole point of the search. A role that
+            # requires more than max_years is dropped no matter how good its
+            # other scores are. (years_required=0 = entry/unstated, kept.)
+            if sj.years_required > max_years:
+                drop_years += 1
+                continue
+            if min_exp and sj.experience_fit < min_exp:
+                drop_years += 1
+                continue
+            # Not actually an AI/ML role -> drop, don't just annotate.
+            if min_role and sj.role_fit < min_role:
+                drop_role += 1
+                continue
             if (sj.raw.pipeline == Pipeline.INTERNATIONAL
                     and sj.visa_status == VisaStatus.NO):
                 drop_visa += 1
@@ -341,8 +430,9 @@ class Scorer:
             kept.append(sj)
 
         kept.sort(key=lambda s: s.composite_score, reverse=True)
-        log.info("[scorer] hard rules: %d -> %d (visa=NO: %d, low CTC: %d, "
-                 "below %d: %d)", len(scored), len(kept), drop_visa,
+        log.info("[scorer] hard rules: %d -> %d (>%dyr exp: %d, low role-fit: "
+                 "%d, visa=NO: %d, low CTC: %d, below %d: %d)", len(scored),
+                 len(kept), max_years, drop_years, drop_role, drop_visa,
                  drop_salary, min_score, drop_thresh)
         return kept
 

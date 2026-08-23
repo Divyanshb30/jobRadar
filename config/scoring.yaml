@@ -9,7 +9,13 @@ gemini:
   # Run scripts/gemini_check.py to see which models your key can reach; reorder
   # freely (put a lite model first if you'd rather have speed over top quality).
   models:
-    # -- top-quality flash (best judgement; ~5 RPM / 20 RPD each) --
+    # -- Groq (only used if GROQ_API_KEY is set; skipped otherwise). Free tier
+    #    is fast and far more generous than Gemini's, so it leads the ladder.
+    #    Prefix "groq:" routes the entry to the Groq provider. --
+    - "groq:llama-3.3-70b-versatile"
+    - "groq:openai/gpt-oss-120b"
+    - "groq:llama-3.1-8b-instant"
+    # -- top-quality Gemini flash (best judgement; ~5 RPM / 20 RPD each) --
     - "gemini-3.7-flash"
     - "gemini-3.6-flash"
     - "gemini-3.5-flash"
@@ -30,6 +36,9 @@ gemini:
   # Fallback used only if "models" above is removed.
   model: "gemini-3.5-flash-lite"
   api_key_env: GEMINI_API_KEY
+  # Groq provider (optional second provider for "groq:" ladder entries).
+  groq_api_key_env: GROQ_API_KEY
+  groq_endpoint: "https://api.groq.com/openai/v1/chat/completions"
   # REST endpoint template; {model} and {key} filled at runtime.
   endpoint: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
   # 20 jobs/call halves the number of requests vs 10, staying well under RPD.
@@ -51,6 +60,12 @@ weights:
 thresholds:
   minimum_composite: 40      # below this -> dropped
   strong_match: 60           # at/above this -> "Strong match"
+  # Hard experience gate: drop any job that requires MORE than this many years.
+  # years_required=0 means entry-level / unstated, which is kept.
+  max_years_experience: 2
+  # Drop jobs the LLM scores below these (0 disables the gate).
+  min_experience_fit: 40     # too senior / clearly needs more experience
+  min_role_fit: 40           # not actually an AI/ML/DS role (BI, generic SWE...)
 
 # How a visa_status maps onto its 0-100 sub-score (international pipeline).
 visa_score_map:
