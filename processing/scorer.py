@@ -219,10 +219,15 @@ class Scorer:
             return "unavailable", None      # Groq model but no GROQ_API_KEY
         headers = {"Authorization": f"Bearer {self.groq_key}",
                    "Content-Type": "application/json"}
+        # Groq (OpenAI-compatible) JSON mode returns an OBJECT, not a bare array,
+        # so ask for {"results": [...]} — _parse_scores already unwraps that.
+        groq_prompt = (prompt + '\n\nReturn a single JSON object of the form '
+                       '{"results": [ one object per job, as specified above ]}.')
         payload = {
             "model": model,
             "temperature": float(self.gcfg.get("temperature", 0.1)),
-            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {"type": "json_object"},
+            "messages": [{"role": "user", "content": groq_prompt}],
         }
         retries = int(self.gcfg.get("max_retries", 3))
         backoff = int(self.gcfg.get("retry_backoff_secs", 5))

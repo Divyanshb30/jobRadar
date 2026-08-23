@@ -181,8 +181,10 @@ class ApifyScraper(BaseScraper):
             # visaSponsorship=false (drops explicit no-sponsorship, keeps
             # YES + UNKNOWN — matching our visa policy).
             for title in q:
+                # NB: no jobType filter — the actor's "fulltime" substring match
+                # drops Wellfound's "Full-time" values and returns nothing.
                 spec: dict[str, Any] = {"query": title, "experienceLevel": "entry",
-                                        "jobType": "fulltime", "maxResults": lim,
+                                        "maxResults": lim,
                                         "descriptionMaxLength": 1200}
                 if self.pipeline == "india":
                     spec["location"] = ["India"]
