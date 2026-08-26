@@ -27,6 +27,22 @@ from processing.sponsor_register import SponsorRegister
 
 log = logging.getLogger("jobradar")
 
+def _groq_reasoning_effort(model: str) -> str | None:
+    """Groq reasoning models must have their think budget capped, or they spend
+    the whole response reasoning and never emit the JSON (HTTP 400
+    json_validate_failed, or empty/prose content). The accepted values differ by
+    family: gpt-oss takes low/medium/high; qwen3 & deepseek take none/default.
+
+    Returns the ``reasoning_effort`` to send for a reasoning model, or ``None``
+    for a non-reasoning model (which instead gets strict json_object mode).
+    """
+    m = model.lower()
+    if "gpt-oss" in m:
+        return "low"
+    if "qwen3" in m or "deepseek" in m:
+        return "none"
+    return None
+
 _PROMPT_HEADER = """You are a STRICT job relevance scorer for a specific candidate:
 
 CANDIDATE PROFILE — Divyansh, ~1 year experience, AI Software Engineer at Amdocs.
@@ -256,9 +272,17 @@ class Scorer:
         payload = {
             "model": model,
             "temperature": float(self.gcfg.get("temperature", 0.1)),
-            "response_format": {"type": "json_object"},
             "messages": [{"role": "user", "content": groq_prompt}],
         }
+        # Reasoning models: cap the think budget so they actually emit the JSON
+        # (their reasoning goes to a separate field, leaving clean JSON in
+        # content, which _parse_scores reads). Non-reasoning models: use strict
+        # json_object mode for guaranteed-parseable output.
+        effort = _groq_reasoning_effort(model)
+        if effort is not None:
+            payload["reasoning_effort"] = effort
+        else:
+            payload["response_format"] = {"type": "json_object"}
         retries = int(self.gcfg.get("max_retries", 3))
         backoff = int(self.gcfg.get("retry_backoff_secs", 5))
         tag = f"groq:{model}"
@@ -328,6 +352,10 @@ class Scorer:
     @staticmethod
     def _parse_scores(text: str) -> list[dict[str, Any]]:
         text = text.strip()
+        # Reasoning models (with JSON mode off) may prepend a <think>...</think>
+        # block before the JSON — strip it so the JSON is what remains.
+        text = re.sub(r"<think>.*?</think>", "", text,
+                      flags=re.DOTALL | re.IGNORECASE).strip()
         # Strip accidental ```json fences.
         text = re.sub(r"^```(?:json)?|```$", "", text, flags=re.MULTILINE).strip()
         try:

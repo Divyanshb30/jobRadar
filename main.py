@@ -43,8 +43,13 @@ from scrapers.visasponsor import VisaSponsorScraper
 log = logging.getLogger("jobradar")
 
 
-def build_scrapers() -> list[BaseScraper]:
-    """Assemble every source. Apify actors are split per (actor, pipeline)."""
+def build_scrapers(no_apify: bool = False) -> list[BaseScraper]:
+    """Assemble every source. Apify actors are split per (actor, pipeline).
+
+    ``no_apify=True`` drops the paid Apify actors — handy for free test runs
+    (``--no-apify``) that exercise the free sources + scoring without spending
+    Apify credits.
+    """
     scrapers: list[BaseScraper] = [
         ApifyScraper("indeed", "india"),
         ApifyScraper("indeed", "international"),
@@ -68,6 +73,10 @@ def build_scrapers() -> list[BaseScraper]:
         # Direct-from-employer ATS boards (Greenhouse/Lever/Ashby watchlist).
         ATSBoardsScraper(),
     ]
+    if no_apify:
+        before = len(scrapers)
+        scrapers = [s for s in scrapers if not isinstance(s, ApifyScraper)]
+        log.info("--no-apify: dropped %d Apify actor(s)", before - len(scrapers))
     return scrapers
 
 
@@ -93,7 +102,7 @@ def run(args: argparse.Namespace) -> int:
     log.info("=== JobRadar run starting ===")
 
     # 1. SCRAPE
-    raw_jobs = scrape_all(build_scrapers())
+    raw_jobs = scrape_all(build_scrapers(no_apify=args.no_apify))
     if not raw_jobs:
         log.error("No raw jobs scraped — every source failed or is unconfigured.")
         return 1
@@ -173,9 +182,18 @@ def main() -> None:
                         help="scrape/filter/score only; no write or email")
     parser.add_argument("--no-email", action="store_true")
     parser.add_argument("--no-sheets", action="store_true")
+    parser.add_argument("--no-apify", action="store_true",
+                        help="skip paid Apify actors (free test runs)")
     parser.add_argument("--limit", type=int, default=0,
                         help="cap listings sent to the scorer (testing)")
     args = parser.parse_args()
+    # Windows consoles default to cp1252 and choke on accented job titles
+    # (e.g. "ā", en-dashes) when printing the dry-run summary. Force UTF-8.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     sys.exit(run(args))
 
 
