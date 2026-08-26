@@ -27,13 +27,18 @@ from processing.dedup import remove_duplicates
 from processing.models import Pipeline, RawJob, ScoredJob
 from processing.prefilter import PreFilter
 from processing.scorer import Scorer
-from scrapers.adzuna import AdzunaScraper
 from scrapers.apify_scraper import ApifyScraper
+from scrapers.arbeitnow import ArbeitnowScraper
+from scrapers.arbeitsagentur import ArbeitsagenturScraper
+from scrapers.ats_boards import ATSBoardsScraper
 from scrapers.base import BaseScraper
+from scrapers.findajob_uk import FindAJobUKScraper
 from scrapers.gmail_alerts import GmailAlertsScraper
+from scrapers.himalayas import HimalayasScraper
 from scrapers.remoteok import RemoteOKScraper
 from scrapers.reed import ReedScraper
 from scrapers.serper_google_jobs import SerperGoogleJobsScraper
+from scrapers.visasponsor import VisaSponsorScraper
 
 log = logging.getLogger("jobradar")
 
@@ -50,11 +55,18 @@ def build_scrapers() -> list[BaseScraper]:
         ApifyScraper("glassdoor", "international"),
         ApifyScraper("wellfound", "india"),
         ApifyScraper("wellfound", "international"),
-        AdzunaScraper(),
         ReedScraper(),
         RemoteOKScraper(),
         SerperGoogleJobsScraper(),
         GmailAlertsScraper(),
+        # Free, keyless sources (added to broaden coverage without Apify spend).
+        ArbeitnowScraper(),          # Germany/EU + remote
+        HimalayasScraper(),          # remote worldwide
+        VisaSponsorScraper(),        # visa-sponsorship listings (UAE/UK/EU)
+        ArbeitsagenturScraper(),     # German federal jobs API
+        FindAJobUKScraper(),         # gov.uk Find a Job (disabled unless re-enabled)
+        # Direct-from-employer ATS boards (Greenhouse/Lever/Ashby watchlist).
+        ATSBoardsScraper(),
     ]
     return scrapers
 

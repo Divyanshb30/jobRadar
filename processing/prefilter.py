@@ -25,6 +25,10 @@ class PreFilter:
         self.excl_re = re.compile(pl["title_exclusion_regex"], re.IGNORECASE)
         self.junk_res = [re.compile(p, re.IGNORECASE)
                          for p in pl.get("junk_title_patterns", [])]
+        self.phd_res = [re.compile(p, re.IGNORECASE)
+                        for p in pl.get("phd_required_patterns", [])]
+        _soft = pl.get("phd_softener_regex")
+        self.phd_softener_re = re.compile(_soft, re.IGNORECASE) if _soft else None
         self.visa_no_res = [re.compile(p, re.IGNORECASE)
                             for p in pl.get("visa_no_patterns", [])]
         self.india_geos = [g.lower() for g in pl["pipelines"]["india"]["geographies"]]
@@ -37,6 +41,7 @@ class PreFilter:
     def run(self, jobs: list[RawJob]) -> list[RawJob]:
         log.info("[prefilter] input: %d", len(jobs))
         jobs = self._title_match(jobs)
+        jobs = self._phd_drop(jobs)
         jobs = self._route_locations(jobs)
         jobs = self._visa_hard_drop(jobs)
         jobs = self._salary_floor(jobs)
@@ -57,6 +62,40 @@ class PreFilter:
             kept.append(j)
         log.info("[prefilter] title_match: %d -> %d", len(jobs), len(kept))
         return kept
+
+    def _phd_drop(self, jobs: list[RawJob]) -> list[RawJob]:
+        """Hard-drop roles that mandate a PhD/doctorate (title OR description).
+
+        Conservative by design — only explicit requirements match, so
+        "PhD preferred / a plus / or equivalent" survive to the LLM, which makes
+        the nuanced call via its ``phd_required`` field.
+        """
+        if not self.phd_res:
+            return jobs
+        kept, dropped = [], 0
+        for j in jobs:
+            text = f"{j.title}\n{j.description}"
+            if self._mandates_phd(text):
+                dropped += 1
+                continue
+            kept.append(j)
+        log.info("[prefilter] phd_required: removed %d", dropped)
+        return kept
+
+    def _mandates_phd(self, text: str) -> bool:
+        """True only if a PhD is *mandatory*. A softener phrase within ~80 chars
+        of the match (e.g. 'preferred', 'or equivalent', 'or Master's') vetoes
+        the drop, so optional-PhD roles survive to the LLM."""
+        for rx in self.phd_res:
+            m = rx.search(text)
+            if not m:
+                continue
+            if self.phd_softener_re is None:
+                return True
+            window = text[max(0, m.start() - 80): m.end() + 80]
+            if not self.phd_softener_re.search(window):
+                return True
+        return False
 
     def _route_locations(self, jobs: list[RawJob]) -> list[RawJob]:
         kept = []

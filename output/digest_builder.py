@@ -41,7 +41,9 @@ def _card(rank: int, sj: ScoredJob) -> str:
         salary = f' &nbsp;|&nbsp; ~{escape(sj.salary_estimate)}'
     loc = escape(sj.location or "—")
     company = escape(sj.company or "Unknown")
-    title = escape(sj.title)
+    star = ('<span title="Resume-aligned priority (Dubai/UAE or AI/GenAI/FDE role)" '
+            'style="color:#d97706">★</span> ' if sj.priority_bonus else "")
+    title = star + escape(sj.title)
     url = escape(sj.url or "#")
     flags = (f'<div style="color:#b45309;font-size:12px;margin-top:2px">'
              f'⚠ {escape(sj.red_flags)}</div>' if sj.red_flags else "")

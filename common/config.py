@@ -48,6 +48,16 @@ def scoring() -> dict[str, Any]:
     return _load_yaml("scoring.yaml")
 
 
+@lru_cache(maxsize=None)
+def watchlist() -> dict[str, Any]:
+    """Optional company watchlist for ATS scanning. Absent file -> empty."""
+    path = CONFIG_DIR / "watchlist.yaml"
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as fh:
+        return yaml.safe_load(fh) or {}
+
+
 def env(name: Optional[str], default: Optional[str] = None) -> Optional[str]:
     """Read a secret from the environment.
 

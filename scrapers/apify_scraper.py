@@ -31,12 +31,13 @@ except Exception:  # pragma: no cover
     ApifyClient = None  # type: ignore
 
 # Locations / countries per pipeline, per actor convention.
+# UAE ('ae') leads the international lists — it is the top-priority geography.
+# Singapore ('sg') intentionally removed from scope.
 INDEED_COUNTRIES = {"india": ["in"],
-                    "international": ["uk", "ae", "sg", "de", "nl", "ie"]}  # ISO-ish
+                    "international": ["ae", "uk", "de", "nl", "ie"]}  # ISO-ish
 LINKEDIN_LOCATIONS = {"india": ["India"],
-                      "international": ["United Kingdom", "United Arab Emirates",
-                                        "Singapore", "Germany", "Netherlands",
-                                        "Ireland"]}
+                      "international": ["United Arab Emirates", "United Kingdom",
+                                        "Germany", "Netherlands", "Ireland"]}
 GLASSDOOR_LOCATIONS = LINKEDIN_LOCATIONS
 BAYT_COUNTRIES = {"international": ["United Arab Emirates"]}          # full names
 

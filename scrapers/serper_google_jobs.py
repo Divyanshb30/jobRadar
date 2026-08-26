@@ -32,9 +32,11 @@ class SerperGoogleJobsScraper(BaseScraper):
         return bool(self.api_key)
 
     def _queries(self) -> list[str]:
-        roles = ["AI Engineer", "Machine Learning Engineer", "ML Engineer",
-                 "NLP Engineer", "Data Scientist"]
-        geos = ["India", "United Kingdom", "Dubai UAE", "Singapore",
+        roles = ["AI Engineer", "GenAI Engineer", "Applied AI Engineer",
+                 "Forward Deployed Engineer", "Machine Learning Engineer",
+                 "ML Engineer", "NLP Engineer", "Data Scientist"]
+        # Dubai / UAE leads — top-priority geography. Singapore removed from scope.
+        geos = ["Dubai UAE", "India", "United Kingdom",
                 "Germany", "Netherlands", "Ireland", "Remote"]
         budget = int(self.cfg.get("queries_per_day", 80))
         queries = [f'"{r}" jobs {g}' for g in geos for r in roles]

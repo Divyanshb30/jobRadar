@@ -44,16 +44,6 @@ apify:
       max_items: 30
 
 free_apis:
-  adzuna:
-    base_url: "https://api.adzuna.com/v1/api/jobs"
-    app_id_env: ADZUNA_APP_ID
-    app_key_env: ADZUNA_APP_KEY
-    # Adzuna has NO UAE ('ae') or Ireland ('ie') coverage — they 404.
-    # Singapore ('sg'), Germany ('de'), Netherlands ('nl') ARE supported.
-    countries: ["gb", "in", "sg", "de", "nl"]
-    max_results_per_query: 50
-    max_days_old: 2
-
   reed:
     base_url: "https://www.reed.co.uk/api/1.0/search"
     api_key_env: REED_API_KEY
@@ -62,6 +52,56 @@ free_apis:
   remoteok:
     url: "https://remoteok.com/api"
     tags: ["machinelearning", "ai", "nlp", "python"]
+
+  # --- Free, keyless job APIs (added to reduce Apify reliance) ---
+
+  arbeitnow:
+    # Free public JSON board (Germany/EU + remote). No key. Laravel pagination.
+    url: "https://www.arbeitnow.com/api/job-board-api"
+    max_pages: 3
+
+  himalayas:
+    # Free public JSON remote-jobs API. No key. offset/limit pagination.
+    url: "https://himalayas.app/jobs/api"
+    limit: 20
+    max_pages: 3
+
+  visasponsor:
+    # visasponsor.jobs — server-rendered HTML (no JSON API); we parse the cards.
+    # These are inherently visa-sponsorship listings, so visa=YES is implied.
+    # `keyword` is the site's search param, so every result is already relevant.
+    # NOTE: the site only supports 6 English-speaking countries (Australia,
+    # Canada, Ireland, New-Zealand, United-Kingdom, United-States) — UAE/Germany/
+    # Netherlands are NOT available (they 500). For our geos that means UK + Ireland;
+    # UAE is covered by Bayt/LinkedIn, DE/NL by Arbeitnow/Arbeitsagentur.
+    base_url: "https://visasponsor.jobs/api/jobs"
+    countries: ["United-Kingdom", "Ireland"]
+    keywords: ["AI Engineer", "Machine Learning Engineer", "Data Scientist"]
+    max_pages: 2
+    # Fetch detail pages for real descriptions, but cap total fetches per run so
+    # we stay polite; survivors past the cap keep a synthetic description.
+    fetch_description: true
+    max_descriptions: 40
+
+  arbeitsagentur:
+    # Bundesagentur für Arbeit (German federal employment agency) v6 JSON API.
+    # The client_id below is a PUBLIC constant, sent as the X-API-Key header — it
+    # is NOT a secret. Only "ARBEIT" (employment) listings are kept.
+    base_url: "https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v6/jobs"
+    client_id: "jobboerse-jobsuche"
+    cities: ["Berlin", "Munich", "Frankfurt", "Hamburg"]
+    size: 25
+    radius_km: 50
+
+  findajob_uk:
+    # gov.uk Find a Job (DWP). No official API. As of 2026 the site is a
+    # JS-rendered "Work Hub" SPA — server HTML carries no results, so plain HTTP
+    # scraping returns nothing (would need a headless browser). DISABLED; the UK
+    # sponsor register + visasponsor(UK) + Reed cover UK visa jobs. The scraper is
+    # kept (best-effort parser) in case the site reverts to server-rendered HTML.
+    enabled: false
+    base_url: "https://findajob.dwp.gov.uk/search"
+    max_pages: 2
 
   serper:
     base_url: "https://google.serper.dev/search"
@@ -76,3 +116,22 @@ free_apis:
     token_path: "gmail_token.json"
     credentials_path: "gmail_credentials.json"
     token_env: GMAIL_OAUTH_TOKEN
+
+# Official government "recognised sponsor" registers — used to VERIFY visa
+# sponsorship deterministically (company on the register => visa=YES) instead of
+# letting the LLM guess. UK + NL publish these for free. See
+# processing/sponsor_register.py. UAE has no register (roles are sponsored by
+# default), so it keeps the "unstated -> YES" heuristic in the scorer prompt.
+sponsor_registers:
+  enabled: true
+  cache_dir: "output/.sponsor_cache"
+  cache_ttl_hours: 24
+  uk:
+    # The CSV link's media-id changes each update, so we scrape the current
+    # ".csv" href off the publication page at runtime.
+    publication_url: "https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers"
+    name_column: "Organisation Name"
+  nl:
+    # IND recognised-sponsors register — a server-rendered HTML table.
+    url: "https://ind.nl/en/public-register-recognised-sponsors/public-register-work"
+    name_column: "Organisation"

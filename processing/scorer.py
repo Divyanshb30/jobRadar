@@ -23,11 +23,23 @@ import requests
 
 from common import config
 from processing.models import (Pipeline, RawJob, ScoredJob, Verdict, VisaStatus)
+from processing.sponsor_register import SponsorRegister
 
 log = logging.getLogger("jobradar")
 
-_PROMPT_HEADER = """You are a STRICT job relevance scorer for an ML Engineer with 1 year \
-of experience, targeting AI/ML/GenAI/Data Science roles in the UK, UAE, Singapore, India, \
+_PROMPT_HEADER = """You are a STRICT job relevance scorer for a specific candidate:
+
+CANDIDATE PROFILE — Divyansh, ~1 year experience, AI Software Engineer at Amdocs.
+Builds PRODUCTION LLM and agentic systems: custom multi-agent orchestration, \
+retrieval-grounded generation (RAG), Azure OpenAI (GPT-4.1), LangChain/LangGraph, MCP, \
+NL->SQL pipelines, LoRA/PEFT fine-tuning, agent memory, and evaluation-gated deployment \
+(CI-blocking eval suites). Strong Python/FastAPI/Docker, MLOps, drift monitoring. \
+Published researcher (Wiley). The BEST-FIT roles are: AI Engineer, GenAI / Generative AI \
+Engineer, Applied AI Engineer, Agentic AI Engineer, LLM Engineer, Forward Deployed \
+Engineer (at AI/LLM product companies), and ML Engineer. These should score HIGHEST on \
+role_fit. Generic BI/reporting/analytics or plain SWE roles score LOW.
+
+Target geographies: UAE/Dubai (TOP priority), UK, India, Germany, Netherlands, Ireland, \
 Europe, and remote. ONLY roles that accept 0-2 years of experience are acceptable — this is \
 a hard requirement, not a preference.
 
@@ -39,19 +51,23 @@ says e.g. "3+ years", "5-7 years", "minimum 4 years", return the lower bound (3,
 containing Senior, Sr, Lead, Staff, Principal, or Architect implies at least 3 years — return \
 3 or more for those UNLESS the description explicitly says it accepts 0-2 years / entry level.
 - experience_fit (0-100): 90+ if clearly 0-2 YoE, 50 if ambiguous, 0 if it needs 3+ years.
-- role_fit (0-100): Is this a real AI/ML/GenAI/DS role? 0 for pure BI/reporting/analytics or \
-generic SWE, 50 for hybrid, 90+ for core ML/AI.
+- role_fit (0-100): Is this a real AI/ML/GenAI/DS role matching the candidate profile? 0 for \
+pure BI/reporting/analytics or generic SWE, 50 for hybrid, 90+ for core AI/GenAI/agentic/LLM \
+or a Forward Deployed Engineer role at an AI/LLM product company.
 - tech_stack_match (0-100): overlap with Python, LLMs, RAG, agents, Azure/AWS, MLOps, NLP, \
 transformers, PyTorch.
+- phd_required (bool): true ONLY if a PhD/doctorate is MANDATORY to apply. Return false if a \
+PhD is merely preferred, "a plus", "nice to have", "or equivalent experience", or listed as \
+"PhD/Master's/Bachelor's" — those are acceptable. When unstated, return false.
 - visa_status: "YES" if sponsorship is offered/implied, "NO" if right-to-work/no-sponsorship \
-is required, "UNKNOWN" if genuinely unclear. Return "N/A" for India jobs. IMPORTANT: for UAE, \
-Gulf, and Singapore roles employer work-visa sponsorship is standard practice, so treat \
-UNSTATED sponsorship there as "YES" unless the ad says otherwise; for UK/Europe, unstated \
-stays "UNKNOWN".
+is required, "UNKNOWN" if genuinely unclear. Return "N/A" for India jobs. IMPORTANT: for UAE \
+and Gulf roles employer work-visa sponsorship is standard practice, so treat UNSTATED \
+sponsorship there as "YES" unless the ad says otherwise; for UK/Europe, unstated stays \
+"UNKNOWN".
 - salary_estimate: for INDIA jobs with no disclosed salary, estimate a likely CTC range in \
 LPA (e.g. "18-25 LPA") from role/company/location; else null.
 - red_flags: one short string ONLY for a genuinely concerning issue. Do NOT flag a notice \
-period of 30 days or less, and do NOT flag Singapore / UK / UAE / India / Europe / remote \
+period of 30 days or less, and do NOT flag UAE / Dubai / UK / India / Europe / remote \
 locations — those are all in scope. Otherwise null.
 
 Return ONLY a JSON array of these objects. No prose, no markdown fences.
@@ -68,6 +84,16 @@ class Scorer:
         self.thresholds = sc["thresholds"]
         self.visa_map = sc["visa_score_map"]
         self.tech_keywords = [k.lower() for k in sc["tech_stack_keywords"]]
+        # Resume-alignment priority boost (Dubai/UAE + AI/GenAI/FDE/Applied-AI).
+        pb = sc.get("priority_boost") or {}
+        self.pb_max = int(pb.get("max_bonus", 0))
+        self.pb_geo = [(str(r["match"]).lower(), int(r["bonus"]))
+                       for r in pb.get("geo", [])]
+        self.pb_title = [(str(r["match"]).lower(), int(r["bonus"]))
+                         for r in pb.get("title", [])]
+        # Deterministic visa verification (UK/NL official sponsor registers).
+        self.sponsors = SponsorRegister()
+        self._sponsor_upgrades = 0
         self.api_key = config.env(self.gcfg["api_key_env"])
         # Optional second provider: Groq (OpenAI-compatible, generous free tier).
         # Any ladder entry prefixed "groq:" is routed here.
@@ -113,6 +139,9 @@ class Scorer:
                      f"  [{self.models[self.model_idx]}]"
                      if self.model_idx < len(self.models) else "  [fallback]")
 
+        if self._sponsor_upgrades:
+            log.info("[scorer] visa upgraded to YES via sponsor register: %d",
+                     self._sponsor_upgrades)
         return self._apply_hard_rules(scored)
 
     # ---- Gemini call ----
@@ -334,7 +363,8 @@ class Scorer:
         if raw is None:
             return self._fallback_score(job)
 
-        visa = self._coerce_visa(job, raw.get("visa_status"))
+        visa = self._maybe_upgrade_visa(job, self._coerce_visa(
+            job, raw.get("visa_status")))
         sj = ScoredJob(
             raw=job,
             experience_fit=raw.get("experience_fit", 0),
@@ -343,11 +373,28 @@ class Scorer:
             tech_stack_match=raw.get("tech_stack_match", 0),
             visa_status=visa,
             salary_estimate=raw.get("salary_estimate"),
+            phd_required=bool(raw.get("phd_required", False)),
             red_flags=raw.get("red_flags"),
         )
         sj.composite_score = self._composite(sj)
+        sj.priority_bonus = self._priority_bonus(job)
+        sj.composite_score = min(100, sj.composite_score + sj.priority_bonus)
         sj.verdict = self._verdict(sj.composite_score)
         return sj
+
+    def _priority_bonus(self, job: RawJob) -> int:
+        """Resume-alignment boost: best geo match + best title match, capped.
+
+        Rewards the top-priority geography (Dubai/UAE) and the roles that fit
+        Divyansh's profile (AI/GenAI/Applied-AI/Agentic/LLM/Forward-Deployed).
+        """
+        if not (self.pb_geo or self.pb_title):
+            return 0
+        geo_hay = f"{job.location} {job.description[:400]}".lower()
+        title_hay = job.title.lower()
+        geo = max((b for m, b in self.pb_geo if m in geo_hay), default=0)
+        title = max((b for m, b in self.pb_title if m in title_hay), default=0)
+        return min(self.pb_max, geo + title)
 
     def _coerce_visa(self, job: RawJob, value: Any) -> VisaStatus:
         if job.pipeline == Pipeline.INDIA:
@@ -355,6 +402,17 @@ class Scorer:
         v = str(value or "UNKNOWN").upper().strip()
         return {"YES": VisaStatus.YES, "NO": VisaStatus.NO,
                 "UNKNOWN": VisaStatus.UNKNOWN}.get(v, VisaStatus.UNKNOWN)
+
+    def _maybe_upgrade_visa(self, job: RawJob, visa: VisaStatus) -> VisaStatus:
+        """Override UNKNOWN/lower to YES when the employer is on the UK/NL
+        official sponsor register — authoritative beats the LLM's guess. An
+        explicit NO from the ad is left untouched (registers list eligibility,
+        not this specific role's stance)."""
+        if (job.pipeline == Pipeline.INTERNATIONAL and visa == VisaStatus.UNKNOWN
+                and self.sponsors.is_sponsor(job.company, job.location)):
+            self._sponsor_upgrades += 1
+            return VisaStatus.YES
+        return visa
 
     def _composite(self, sj: ScoredJob) -> int:
         w = self.weights
@@ -391,11 +449,13 @@ class Scorer:
         exp = 40 if any(k in job.title.lower() for k in
                         ("senior", "lead", "staff", "principal")) else 65
         visa = (VisaStatus.NA if job.pipeline == Pipeline.INDIA
-                else VisaStatus.UNKNOWN)
+                else self._maybe_upgrade_visa(job, VisaStatus.UNKNOWN))
         sj = ScoredJob(raw=job, experience_fit=exp, role_fit=role,
                        tech_stack_match=tech, visa_status=visa,
                        red_flags="scored by fallback (no LLM)")
         sj.composite_score = self._composite(sj)
+        sj.priority_bonus = self._priority_bonus(job)
+        sj.composite_score = min(100, sj.composite_score + sj.priority_bonus)
         sj.verdict = self._verdict(sj.composite_score)
         return sj
 
@@ -409,8 +469,15 @@ class Scorer:
         floor_lpa = float(config.pipelines()["pipelines"]["india"]["min_ctc_lpa"])
         kept = []
         drop_years = drop_role = drop_visa = drop_salary = drop_thresh = 0
+        drop_phd = 0
 
         for sj in scored:
+            # PhD backstop — the pre-filter regex catches explicit "PhD required"
+            # phrasings; this catches the ones the LLM judged mandatory that the
+            # regex missed.
+            if sj.phd_required:
+                drop_phd += 1
+                continue
             # Hard experience gate — the whole point of the search. A role that
             # requires more than max_years is dropped no matter how good its
             # other scores are. (years_required=0 = entry/unstated, kept.)
@@ -439,10 +506,10 @@ class Scorer:
             kept.append(sj)
 
         kept.sort(key=lambda s: s.composite_score, reverse=True)
-        log.info("[scorer] hard rules: %d -> %d (>%dyr exp: %d, low role-fit: "
-                 "%d, visa=NO: %d, low CTC: %d, below %d: %d)", len(scored),
-                 len(kept), max_years, drop_years, drop_role, drop_visa,
-                 drop_salary, min_score, drop_thresh)
+        log.info("[scorer] hard rules: %d -> %d (PhD req: %d, >%dyr exp: %d, "
+                 "low role-fit: %d, visa=NO: %d, low CTC: %d, below %d: %d)",
+                 len(scored), len(kept), drop_phd, max_years, drop_years,
+                 drop_role, drop_visa, drop_salary, min_score, drop_thresh)
         return kept
 
 

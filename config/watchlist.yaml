@@ -1,0 +1,45 @@
+# Company watchlist — pulled DIRECTLY from each employer's ATS board (free, no
+# auth). Highest-signal, zero-aggregator-noise source. Every token below was
+# verified live (returns jobs) on 2026-08-26; re-verify if a company 404s.
+#
+# ats: greenhouse | lever | ashby   (endpoint chosen by platform)
+#   greenhouse -> https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true
+#   lever      -> https://api.lever.co/v0/postings/{token}?mode=json
+#   ashby      -> https://api.ashbyhq.com/posting-api/job-board/{token}
+# geo: informational tag (global | uae). Titles are still pre-filtered to AI/ML
+# and routed/visa-checked by the normal pipeline, so add any company freely.
+
+companies:
+  # --- Frontier / AI-product companies (global, mostly visa-sponsoring) ---
+  - {name: "Anthropic",        ats: greenhouse, token: anthropic,        geo: global}
+  - {name: "OpenAI",           ats: ashby,      token: openai,           geo: global}
+  - {name: "Cohere",           ats: ashby,      token: cohere,           geo: global}
+  - {name: "Mistral AI",       ats: lever,      token: mistral,          geo: global}
+  - {name: "Perplexity",       ats: ashby,      token: perplexity,       geo: global}
+  - {name: "ElevenLabs",       ats: ashby,      token: elevenlabs,       geo: global}
+  - {name: "Cursor (Anysphere)", ats: ashby,    token: cursor,           geo: global}
+  - {name: "Sierra",           ats: ashby,      token: sierra,           geo: global}
+  - {name: "Harvey",           ats: ashby,      token: harvey,           geo: global}
+  - {name: "Writer",           ats: ashby,      token: writer,           geo: global}
+  - {name: "Runway",           ats: ashby,      token: runway,           geo: global}
+  - {name: "Suno",             ats: ashby,      token: suno,             geo: global}
+  - {name: "Lovable",          ats: ashby,      token: lovable,          geo: global}
+  - {name: "Decagon",          ats: ashby,      token: decagon,          geo: global}
+  - {name: "Mercor",           ats: ashby,      token: mercor,           geo: global}
+  - {name: "Tavus",            ats: ashby,      token: tavus,            geo: global}
+  - {name: "Baseten",          ats: ashby,      token: baseten,          geo: global}
+  - {name: "Deepgram",         ats: ashby,      token: deepgram,         geo: global}
+  - {name: "Pinecone",         ats: ashby,      token: pinecone,         geo: global}
+  - {name: "Weaviate",         ats: ashby,      token: weaviate,         geo: global}
+  - {name: "AssemblyAI",       ats: greenhouse, token: assemblyai,       geo: global}
+  - {name: "Cresta",           ats: greenhouse, token: cresta,           geo: global}
+  - {name: "Instabase",        ats: greenhouse, token: instabase,        geo: global}
+  - {name: "Scale AI",         ats: greenhouse, token: scaleai,          geo: global}
+  - {name: "Databricks",       ats: greenhouse, token: databricks,       geo: global}
+  - {name: "Abnormal Security", ats: greenhouse, token: abnormalsecurity, geo: global}
+  - {name: "Ramp",             ats: ashby,      token: ramp,             geo: global}
+  - {name: "Notion",           ats: ashby,      token: notion,           geo: global}
+  - {name: "Figma",            ats: greenhouse, token: figma,            geo: global}
+  - {name: "Stripe",           ats: greenhouse, token: stripe,           geo: global}
+  # --- Dubai / UAE ---
+  - {name: "Careem",           ats: greenhouse, token: careem,           geo: uae}

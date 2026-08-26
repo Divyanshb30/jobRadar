@@ -50,7 +50,7 @@ class RawJob(BaseModel):
     fields. `raw` retains the untouched source dict for debugging.
     """
 
-    source: str                      # "Indeed", "LinkedIn", "Adzuna", ...
+    source: str                      # "Indeed", "LinkedIn", "Reed", ...
     title: str
     company: str = ""
     location: str = ""
@@ -106,9 +106,11 @@ class ScoredJob(BaseModel):
     tech_stack_match: int = 0        # 0-100
     visa_status: VisaStatus = VisaStatus.NA
     salary_estimate: Optional[str] = None    # e.g. "18-25 LPA", India only
+    phd_required: bool = False               # LLM backstop for the PhD gate
     red_flags: Optional[str] = None
 
-    composite_score: int = 0         # 0-100 weighted
+    composite_score: int = 0         # 0-100 weighted (incl. priority boost)
+    priority_bonus: int = 0          # resume-alignment boost folded into composite
     verdict: Verdict = Verdict.DROP
 
     @field_validator("years_required", mode="before")

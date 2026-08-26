@@ -1,12 +1,18 @@
 # Pipeline definitions, geography routing, role keyword filters.
 
-# Search terms fed to the scrapers.
+# Search terms fed to the scrapers. ORDER MATTERS: Apify uses only the first
+# `apify.queries_per_run` (see sources.yaml) of these per actor run, so the most
+# resume-aligned titles lead. Divyansh's profile = production LLM / agentic / RAG
+# on Azure OpenAI, so AI/GenAI/Applied-AI/Agentic + Forward Deployed lead the list.
 search_keywords:
   - "AI Engineer"
+  - "GenAI Engineer"
   - "Applied AI Engineer"
+  - "Forward Deployed Engineer"
+  - "Agentic AI Engineer"
+  - "LLM Engineer"
   - "Machine Learning Engineer"
   - "ML Engineer"
-  - "GenAI Engineer"
   - "NLP Engineer"
   - "MLOps Engineer"
   - "Data Scientist"
@@ -14,18 +20,23 @@ search_keywords:
 target_roles:
   primary:
     - "AI Engineer"
+    - "GenAI Engineer"
     - "Applied AI Engineer"
+    - "Forward Deployed Engineer"   # FDE at AI product cos = strong resume fit
+    - "Agentic AI Engineer"
+    - "LLM Engineer"
     - "ML Engineer"
     - "Machine Learning Engineer"
-    - "GenAI Engineer"
-    - "Agentic AI Engineer"
     - "NLP Engineer"
     - "MLOps Engineer"
   secondary:
     - "Data Scientist"   # kept only if the LLM confirms it is ML-heavy
 
 # Title MUST match this to survive the pre-filter (case-insensitive).
-title_keywords_regex: "(ai\\s*engineer|applied\\s*ai|machine\\s*learn|ml\\s*engineer|genai|generative\\s*ai|agentic|nlp|mlops|deep\\s*learn|llm|data\\s*scien|artificial\\s*intel)"
+# "forward deployed" is whitelisted because FDE roles at AI product companies
+# (Palantir, OpenAI, Anthropic-style) rarely carry an explicit ML keyword in the
+# title yet are a strong fit — the LLM role_fit check downstream vets them.
+title_keywords_regex: "(ai\\s*engineer|applied\\s*ai|machine\\s*learn|ml\\s*engineer|genai|generative\\s*ai|agentic|forward\\s*deployed|nlp|mlops|deep\\s*learn|llm|data\\s*scien|artificial\\s*intel)"
 
 # If the title matches this, drop it (senior/lead/etc. above the experience gate).
 title_exclusion_regex: "(senior|\\bsr\\.?\\b|staff|principal|\\blead\\b|\\barchitect\\b|director|head\\s+of|vp\\s+of|\\bmanager\\b|\\bintern\\b|phd\\s+required|(?:1[0-9]|[3-9])\\+\\s*years)"
@@ -44,6 +55,24 @@ experience_gate:
   max_years: 2
   drop_if_title_contains: ["senior", "staff", "principal", "lead", "director"]
 
+# Hard-drop listings that MANDATE a PhD/doctorate. Checked against title AND
+# description (the old title-only "phd required" rule missed the common case
+# where the requirement is stated in the body). Deliberately conservative: only
+# explicit *requirements* match. "PhD preferred / a plus / nice to have / or
+# equivalent / or a Master's" must NOT match — the LLM `phd_required` field is
+# the backstop for phrasings these regexes don't catch.
+phd_required_patterns:
+  - "ph\\.?\\s?d\\.?[^.\\n]{0,40}\\b(is\\s+)?(required|mandatory|essential|a must)\\b"
+  - "\\b(must|required to)\\s+(have|hold|possess)[^.\\n]{0,30}\\bph\\.?\\s?d\\b"
+  - "\\brequires?\\s+(a\\s+|an\\s+)?(ph\\.?\\s?d|doctorate|doctoral)\\b"
+  - "\\bdoctora(te|l)\\b[^.\\n]{0,30}\\b(required|mandatory|essential)\\b"
+  - "\\bph\\.?\\s?d\\.?\\s+(in\\s+[\\w /]+)?\\s*(is\\s+)?required\\b"
+
+# If any of these "softener" phrases sits near a PhD mention, the requirement is
+# NOT mandatory (preferred / optional / or-equivalent), so the drop above is
+# vetoed. Bias is conservative: when in doubt, KEEP and let the LLM decide.
+phd_softener_regex: "(preferred|not\\s+required|a\\s+plus|nice\\s+to\\s+have|desirable|advantageous|or\\s+equivalent|or\\s+(a\\s+)?(m\\.?s\\.?|master|msc|bachelor|b\\.?s\\.?|beng|degree))"
+
 staleness_hours: 48
 
 pipelines:
@@ -55,12 +84,14 @@ pipelines:
     salary_undisclosed_action: "keep"   # LLM estimates; drop only if estimate < floor
 
   international:
-    geographies: ["united kingdom", "uk", "london", "manchester", "cambridge", "edinburgh", "oxford", "bristol", "leeds", "birmingham", "dubai", "abu dhabi", "uae", "united arab emirates", "germany", "berlin", "munich", "netherlands", "amsterdam", "ireland", "dublin", "singapore", "europe"]
+    # Dubai / UAE lead — it is the top-priority geography (see scoring.yaml
+    # priority_boost). Singapore intentionally removed from scope.
+    geographies: ["dubai", "abu dhabi", "uae", "united arab emirates", "united kingdom", "uk", "london", "manchester", "cambridge", "edinburgh", "oxford", "bristol", "leeds", "birmingham", "germany", "berlin", "munich", "netherlands", "amsterdam", "ireland", "dublin", "europe"]
     remote_ok: true
     visa_required: true
     visa_no_action: "drop"              # hard drop, no exceptions
     visa_unknown_action: "keep"
-    priority_countries: ["united kingdom", "united arab emirates"]
+    priority_countries: ["united arab emirates", "united kingdom"]
 
 # Regexes that hard-drop a listing at pre-filter (before any LLM cost) when the
 # description explicitly rules out sponsorship. International pipeline only.

@@ -57,6 +57,30 @@ weights:
   tech_stack_match: 0.20
   visa_status: 0.20          # international only; redistributed for India
 
+# Resume-alignment boost. After the weighted composite is computed, a bonus is
+# added (capped at max_bonus, composite capped at 100) for jobs whose LOCATION or
+# TITLE matches the patterns below. This is how "prioritise Dubai + AI/GenAI/FDE/
+# Applied-AI roles" is expressed: aligned jobs float to the top of the digest and
+# borderline aligned ones are more likely to clear the 40 threshold.
+# Matching is case-insensitive substring. A job takes the single highest geo
+# bonus and the single highest title bonus that match (they stack, then cap).
+priority_boost:
+  max_bonus: 20
+  geo:
+    - {match: "dubai", bonus: 12}
+    - {match: "abu dhabi", bonus: 12}
+    - {match: "uae", bonus: 12}
+    - {match: "united arab emirates", bonus: 12}
+  title:
+    - {match: "forward deployed", bonus: 12}
+    - {match: "applied ai", bonus: 8}
+    - {match: "genai", bonus: 8}
+    - {match: "generative ai", bonus: 8}
+    - {match: "agentic", bonus: 8}
+    - {match: "ai engineer", bonus: 6}
+    - {match: "llm", bonus: 5}
+    - {match: "rag", bonus: 5}
+
 thresholds:
   minimum_composite: 40      # below this -> dropped
   strong_match: 60           # at/above this -> "Strong match"

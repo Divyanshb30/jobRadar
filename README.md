@@ -1,12 +1,22 @@
 # JobRadar
 
-Automated, near-zero-cost job finder. Scrapes 11 sources daily, scores every
-listing with an LLM ladder (Groq → Gemini) — experience gate, visa check,
-role-fit — writes scored results to a Google Sheet, and emails a digest, all on
-free tiers + ~$5/month of Apify.
+Automated, near-zero-cost job finder. Scrapes 15+ sources daily, scores every
+listing with an LLM ladder (Groq → Gemini) — experience gate, PhD gate, visa
+check, role-fit, plus a resume-alignment priority boost — writes scored results
+to a Google Sheet, and emails a digest, all on free tiers + ~$5/month of Apify.
 
-Two pipelines: **India** (≥25 LPA floor) and **International** (UK/UAE/Singapore/
-Europe/Remote, visa-NO hard-dropped). Target: 50–75 scored, relevant jobs/day.
+Sources beyond the Apify actors are **free and keyless**: Reed, RemoteOK,
+Google Jobs (Serper), Arbeitnow, Himalayas, visasponsor.jobs, the German federal
+jobs API (Arbeitsagentur), and a **company watchlist** pulled straight from
+employer ATS boards (Greenhouse/Lever/Ashby — see `config/watchlist.yaml`).
+
+Two pipelines: **India** (≥15 LPA floor) and **International** (UAE/Dubai first,
+then UK/Germany/Netherlands/Ireland/Europe/Remote, visa-NO hard-dropped).
+Dubai/UAE and AI/GenAI/Applied-AI/Forward-Deployed roles are boosted to the top
+of the digest (see `priority_boost` in `scoring.yaml`). For UK/NL roles, visa
+sponsorship is **verified deterministically** against the official UK and NL
+sponsor registers (`processing/sponsor_register.py`) rather than guessed. Target:
+50–75 scored, relevant jobs/day.
 
 ```
 scrape → pre-filter → dedup → LLM score → Google Sheet + email digest
@@ -16,10 +26,12 @@ scrape → pre-filter → dedup → LLM score → Google Sheet + email digest
 
 ```
 jobRadar/
-├── config/            sources.yaml, pipelines.yaml, scoring.yaml, .env.example
+├── config/            sources.yaml, pipelines.yaml, scoring.yaml, watchlist.yaml
 ├── scrapers/          base + Apify (Indeed/LinkedIn/Naukri/Bayt/Glassdoor/
-│                      Wellfound) + Adzuna, Reed, RemoteOK, Serper, Gmail alerts
-├── processing/        models (Pydantic) · prefilter · dedup · scorer (Gemini)
+│                      Wellfound) + Reed, RemoteOK, Serper, Gmail alerts,
+│                      Arbeitnow, Himalayas, VisaSponsor, Arbeitsagentur,
+│                      ats_boards (Greenhouse/Lever/Ashby), findajob_uk (off)
+├── processing/        models · prefilter · dedup · scorer · sponsor_register
 ├── output/            sheets_writer · digest_builder · gmail_sender
 ├── scripts/           gmail_authorize.py (one-time OAuth token)
 ├── main.py            orchestrator
@@ -41,7 +53,6 @@ cp config/.env.example .env        # then fill in your keys
 |---|---|---|
 | `APIFY_TOKEN` | apify.com → Settings → API tokens | ~$5/mo credit |
 | `GEMINI_API_KEY` | aistudio.google.com → Get API key | free tier |
-| `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | developer.adzuna.com | free |
 | `REED_API_KEY` | reed.co.uk/developers | free |
 | `SERPER_API_KEY` | serper.dev | 2,500/mo free |
 | `GOOGLE_SHEETS_CREDENTIALS` | Cloud Console → Service Account → JSON key | paste full JSON |
@@ -131,8 +142,27 @@ the `credentials/` folder is git-ignored). Logs upload as an artifact.
 
 ## Cost
 
-Apify ~$5/mo; Gemini, Adzuna, Reed, RemoteOK, Serper, Gmail, Google Sheets, and
-GitHub Actions all on free tiers.
+Apify ~$5/mo; Gemini, Reed, RemoteOK, Serper, Arbeitnow, Himalayas,
+visasponsor.jobs, Arbeitsagentur, the ATS boards, the sponsor registers, Gmail,
+Google Sheets, and GitHub Actions all on free tiers.
+
+## Free sources & visa verification
+
+- **Company watchlist** (`config/watchlist.yaml`) — direct pulls from
+  Greenhouse/Lever/Ashby boards (free, no auth). Highest-signal source; edit the
+  list freely. Each token was verified live; if a company 404s, its token
+  changed — fix or remove it.
+- **Sponsor registers** (`processing/sponsor_register.py`) — the official UK
+  (Home Office) and NL (IND) recognised-sponsor lists are downloaded + cached
+  daily; a UK/NL job whose employer is on the register is marked visa **YES**
+  deterministically instead of leaving it to the LLM.
+- **visasponsor.jobs** — visa-sponsorship listings, but the site only supports
+  6 English-speaking countries (AU/CA/IE/NZ/UK/US), so for us it's UK + Ireland.
+- **gov.uk Find a Job** — now a JS-rendered "Work Hub" SPA with no server-side
+  results, so `scrapers/findajob_uk.py` ships **disabled**; re-enable only if the
+  site reverts to server-rendered HTML.
+- **my.ukvisajobs.com** — sign-in/paywalled, no public API, so it is **not**
+  integrated; the free UK sponsor register above is the same underlying data.
 
 ## Notes on the Apify scrapers
 
