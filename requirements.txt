@@ -6,6 +6,7 @@ python-dotenv>=1.0
 
 # Scraping
 apify-client>=1.7
+beautifulsoup4>=4.12   # HTML parsing: visasponsor.jobs, findajob_uk, NL sponsor register
 
 # Google Sheets
 gspread>=6.0
