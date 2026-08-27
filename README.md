@@ -164,6 +164,35 @@ Google Sheets, and GitHub Actions all on free tiers.
 - **my.ukvisajobs.com** — sign-in/paywalled, no public API, so it is **not**
   integrated; the free UK sponsor register above is the same underlying data.
 
+## Outreach (cold email + LinkedIn/X drafts)
+
+`python main.py --outreach` (add `--dry-run` for a safe, no-send test) takes the
+top scored jobs and, per company, **discovers contacts, personalises copy, and
+produces drafts**. It is human-in-the-loop by design — **nothing is ever sent
+automatically.**
+
+```
+top scored jobs → discover contacts (Serper) → personalise (LLM) → drafts
+```
+
+- **Discovery** (`outreach/discovery.py`) — free: Serper finds people on
+  LinkedIn, resolves the company email domain, and guesses a work email. If
+  `HUNTER_API_KEY` is set, emails are found/verified via Hunter instead.
+- **Personalisation** (`outreach/personalize.py`) — one LLM call per job writes a
+  specific, non-generic email + a ≤300-char LinkedIn note (+ optional X DM),
+  using a concrete proof point from `config/outreach_profile.md`. Tone/structure
+  is controlled by the editable templates in `config/outreach.yaml`.
+- **Output** (`outreach/drafts.py`) — email lands as **Gmail drafts** (needs the
+  `gmail.compose` scope — re-run `python scripts/gmail_authorize.py` once), and
+  everything is also written to `output/outreach/` (gitignored) for review.
+  LinkedIn/X copy is files-only, for you to paste and send. In `--dry-run` no
+  Gmail drafts are created.
+
+Edit `config/outreach.yaml` for channels, personas, score threshold, per-run cap,
+and templates; edit `config/outreach_profile.md` for your proof points. A
+dedicated FROM address (set `GMAIL_SENDER`) is recommended so cold email never
+touches your primary inbox's reputation.
+
 ## Notes on the Apify scrapers
 
 Actor input/output schemas drift over time. `scrapers/apify_scraper.py` builds a

@@ -21,3 +21,4 @@ logs/
 *.log
 .DS_Store
 output/.sponsor_cache/
+output/outreach/

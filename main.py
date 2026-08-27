@@ -130,6 +130,15 @@ def run(args: argparse.Namespace) -> int:
     scored: list[ScoredJob] = Scorer().score(filtered)
     _log_summary(scored)
 
+    # 4b. OUTREACH (optional) — discover contacts + draft messages for the top
+    # jobs. In --dry-run it writes files only (no Gmail drafts created).
+    if args.outreach:
+        try:
+            from outreach.runner import OutreachRunner
+            OutreachRunner().run(scored, gmail=not args.dry_run)
+        except Exception as exc:  # noqa: BLE001 - outreach must not sink the run
+            log.error("Outreach step failed: %s", exc, exc_info=True)
+
     if args.dry_run:
         log.info("--dry-run: skipping write + email")
         _print_top(scored)
@@ -184,6 +193,9 @@ def main() -> None:
     parser.add_argument("--no-sheets", action="store_true")
     parser.add_argument("--no-apify", action="store_true",
                         help="skip paid Apify actors (free test runs)")
+    parser.add_argument("--outreach", action="store_true",
+                        help="after scoring, draft outreach for the top jobs "
+                             "(--dry-run keeps it to files, no Gmail drafts)")
     parser.add_argument("--limit", type=int, default=0,
                         help="cap listings sent to the scorer (testing)")
     args = parser.parse_args()

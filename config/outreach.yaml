@@ -1,0 +1,72 @@
+# Cold-outreach config. Everything is human-in-the-loop: the runner DISCOVERS
+# contacts, PERSONALISES messages, and produces DRAFTS. Nothing is ever sent
+# automatically — email goes to Gmail drafts (or local files), LinkedIn/X copy
+# goes to files for you to paste and send yourself.
+
+enabled: true
+profile_path: "config/outreach_profile.md"
+
+# Which candidate jobs to reach out on (taken from the scored pipeline).
+selection:
+  pipelines: ["International", "India"]   # which pipelines are eligible
+  min_score: 70            # only strong matches
+  max_per_run: 8           # cap contacts researched per run (politeness + cost)
+  require_company: true    # skip listings with no company name
+
+channels:
+  email: true
+  linkedin: true           # draft only — you send manually
+  twitter: false           # draft only — off by default (needs handles)
+
+# Persona to target, best-first. The discovery step searches for these titles.
+personas:
+  - "engineering manager"
+  - "head of AI"
+  - "AI recruiter"
+  - "talent acquisition"
+  - "founder"            # startups
+  - "machine learning engineer"   # peer, for referral asks
+
+# Contact discovery. Free path = Serper (LinkedIn people search + domain lookup)
+# + email-pattern guess. If HUNTER_API_KEY is set, emails are found/verified via
+# Hunter instead of guessed. Nothing here requires a paid key.
+discovery:
+  serper_results: 5
+  contacts_per_job: 2
+  # Email patterns tried (in order) when guessing from a company domain.
+  email_patterns: ["{first}.{last}", "{first}", "{f}{last}", "{first}{last}"]
+  hunter_api_key_env: HUNTER_API_KEY   # optional; used if present
+
+# Output. Email drafts land in Gmail if compose auth is available (see
+# scripts/gmail_authorize.py), otherwise everything is written to out_dir.
+output:
+  gmail_drafts: true
+  out_dir: "output/outreach"
+  from_env: GMAIL_SENDER      # FROM address; a dedicated alias is recommended
+  daily_email_cap: 12         # safety cap on drafts created per run
+
+# Templates are STYLE GUIDANCE for the personaliser (it writes the final copy in
+# this voice, filling specifics from the job + your profile). Edit tone freely.
+# Available context the model uses: contact first name/title, company, role,
+# a researched company "hook", and your profile proof points.
+templates:
+  email:
+    # The model returns a subject + body in this spirit. Keep it short, specific,
+    # non-generic, and end with a low-friction ask.
+    guidance: |
+      Warm, concise (110-150 words), specific to the company and role. Structure:
+      1) one-line hook tied to the company/role (not generic flattery),
+      2) one concrete proof point from the profile that maps to their needs,
+      3) a low-friction ask (quick chat, or a pointer to the right person).
+      First person, no buzzword soup, no "I am writing to express". Sign off with
+      the candidate's name and LinkedIn.
+  linkedin:
+    # Connection note: HARD LIMIT 300 characters.
+    guidance: |
+      A LinkedIn connection note, MAX 300 characters, friendly and specific:
+      reference the role/company + one concrete proof point + a soft connect ask.
+      No links (they're stripped by LinkedIn).
+  twitter:
+    guidance: |
+      A short, casual X/Twitter DM (under 280 chars) to a founder/eng leader:
+      reference something specific, one proof point, and a light ask to chat.
