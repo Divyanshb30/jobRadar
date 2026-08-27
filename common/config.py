@@ -58,20 +58,40 @@ def watchlist() -> dict[str, Any]:
         return yaml.safe_load(fh) or {}
 
 
+@lru_cache(maxsize=None)
+def outreach() -> dict[str, Any]:
+    """Optional cold-outreach config. Absent file -> empty (feature off)."""
+    path = CONFIG_DIR / "outreach.yaml"
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as fh:
+        return yaml.safe_load(fh) or {}
+
+
 def env(name: Optional[str], default: Optional[str] = None) -> Optional[str]:
     """Read a secret from the environment.
 
     ``name`` may be None (some optional sources have no configured env key),
     in which case ``default`` is returned.
+
+    The value is stripped of surrounding whitespace: GitHub Actions secrets are
+    routinely stored with a trailing newline, and an API key with a ``\\n`` makes
+    ``requests`` reject the ``Authorization``/``X-API-KEY`` header outright
+    ("Invalid ... return character(s) in header value"). No key/token/id we read
+    has meaningful leading or trailing whitespace, so stripping is always safe.
     """
     if not name:
         return default
     val = os.environ.get(name)
-    return val if val not in (None, "") else default
+    if val is None:
+        return default
+    val = val.strip()
+    return val or default
 
 
 def require_env(name: str) -> str:
     val = os.environ.get(name)
+    val = val.strip() if val else val
     if not val:
         raise RuntimeError(f"Required secret ${name} is not set")
     return val
