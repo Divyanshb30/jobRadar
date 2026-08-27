@@ -1,0 +1,73 @@
+name: JobRadar Free Scan (no Apify)
+
+# On-demand run of the full pipeline WITHOUT the paid Apify actors — it uses only
+# the free sources (Reed, RemoteOK, Serper, Arbeitnow, Himalayas, visasponsor,
+# Arbeitsagentur, the ATS watchlist, Gmail alerts) plus scoring + sponsor
+# verification, then writes the Sheet and emails the digest like the daily scan.
+# Trigger it from the Actions tab; it costs zero Apify credits.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (score + print only; no Sheet write, no email)"
+        type: boolean
+        default: false
+      no_email:
+        description: "Skip sending the digest email"
+        type: boolean
+        default: false
+      no_sheets:
+        description: "Skip writing to Google Sheets"
+        type: boolean
+        default: false
+      outreach:
+        description: "Draft outreach for the top jobs (Gmail drafts, never sent)"
+        type: boolean
+        default: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run JobRadar (no Apify)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          REED_API_KEY: ${{ secrets.REED_API_KEY }}
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          HUNTER_API_KEY: ${{ secrets.HUNTER_API_KEY }}
+          GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+          JOBRADAR_SHEET_ID: ${{ secrets.JOBRADAR_SHEET_ID }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
+          GMAIL_RECIPIENT: ${{ secrets.GMAIL_RECIPIENT }}
+          GMAIL_OAUTH_TOKEN: ${{ secrets.GMAIL_OAUTH_TOKEN }}
+        run: |
+          ARGS="--no-apify"
+          if [ "${{ inputs.dry_run }}" = "true" ];  then ARGS="$ARGS --dry-run"; fi
+          if [ "${{ inputs.no_email }}" = "true" ]; then ARGS="$ARGS --no-email"; fi
+          if [ "${{ inputs.no_sheets }}" = "true" ]; then ARGS="$ARGS --no-sheets"; fi
+          if [ "${{ inputs.outreach }}" = "true" ]; then ARGS="$ARGS --outreach"; fi
+          echo "Running: python main.py $ARGS"
+          python main.py $ARGS
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jobradar-free-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
