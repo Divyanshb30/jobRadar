@@ -5,6 +5,12 @@ apify:
   token_env: APIFY_TOKEN
   # Actor runs time out after this many seconds; keeps the whole job < 20 min.
   timeout_secs: 240
+  # Max Apify actor runs allowed to execute AT THE SAME TIME. The account's
+  # concurrent-run limit is 5; a global semaphore (scrapers/apify_scraper.py)
+  # caps our in-flight runs to this so we never trip the platform's 429
+  # "max concurrent runs" error (which otherwise made every run fail silently).
+  # 4 leaves one slot of headroom; raise to 5 for max throughput.
+  max_concurrent_runs: 4
   # How many search-title queries to run per actor+pipeline. Each query is a
   # separate actor run, so this is the main cost/coverage knob. 2 = broad but
   # cheap; raise for wider coverage at higher Apify spend.

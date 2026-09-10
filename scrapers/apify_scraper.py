@@ -16,6 +16,7 @@ Output field names still vary per actor, so ``_map_item`` stays tolerant.
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import timedelta
 from typing import Any, Optional
 
@@ -29,6 +30,30 @@ try:
     from apify_client import ApifyClient
 except Exception:  # pragma: no cover
     ApifyClient = None  # type: ignore
+
+# --- global concurrent-run gate -------------------------------------------
+# Apify caps how many actor runs may execute *concurrently* on the account
+# (5 on the current plan). main.py runs every scraper in a 6-worker thread
+# pool, so without a throttle up to 6 Apify actor runs fire at once — over the
+# limit — and the platform rejects the extras with HTTP 429. apify-client
+# retries a 429 only a few times with sub-second backoff, which never clears
+# (the blocking runs last minutes), so those runs raise, get swallowed, and
+# "nothing is fetched". This module-level semaphore is shared across ALL
+# ApifyScraper instances/threads and caps in-flight ``.call()``s to
+# ``apify.max_concurrent_runs`` (default 4, one below the limit for headroom).
+# Free scrapers are unaffected — the pool still runs them in parallel.
+_RUN_GATE: threading.BoundedSemaphore | None = None
+_RUN_GATE_LOCK = threading.Lock()
+
+
+def _run_gate() -> threading.BoundedSemaphore:
+    global _RUN_GATE
+    if _RUN_GATE is None:
+        with _RUN_GATE_LOCK:
+            if _RUN_GATE is None:
+                n = int(config.sources()["apify"].get("max_concurrent_runs", 4))
+                _RUN_GATE = threading.BoundedSemaphore(max(1, n))
+    return _RUN_GATE
 
 # Locations / countries per pipeline, per actor convention.
 # UAE ('ae') leads the international lists — it is the top-priority geography.
@@ -208,17 +233,23 @@ class ApifyScraper(BaseScraper):
         log.info("[%s/%s] %d actor run(s) on %s",
                  self.actor_key, self.pipeline, len(specs), actor_id)
 
+        gate = _run_gate()
         jobs: list[RawJob] = []
         for spec in specs:
-            try:
-                run = client.actor(actor_id).call(
-                    run_input=spec,
-                    run_timeout=timedelta(seconds=timeout),
-                    max_items=self._limit,
-                )
-            except Exception as exc:  # noqa: BLE001 - one bad run must not kill others
-                log.warning("[%s] run failed (input=%s): %s",
-                            self.actor_key, spec, exc)
+            run = None
+            # Hold a concurrency slot only for the actor run itself; the dataset
+            # read below doesn't count against the concurrent-run limit.
+            with gate:
+                try:
+                    run = client.actor(actor_id).call(
+                        run_input=spec,
+                        run_timeout=timedelta(seconds=timeout),
+                        max_items=self._limit,
+                    )
+                except Exception as exc:  # noqa: BLE001 - one bad run must not kill others
+                    log.warning("[%s] run failed (input=%s): %s",
+                                self.actor_key, spec, exc)
+            if run is None:
                 continue
             # apify-client 3.x returns a pydantic Run object, not a dict.
             dataset_id = getattr(run, "default_dataset_id", None)
